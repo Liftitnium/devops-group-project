@@ -1,0 +1,19 @@
+# Tooling config only; this is a service, not a package.
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+
+[tool.ruff.lint]
+# E/F errors, I imports, B bugbear, UP pyupgrade, S bandit security checks
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]   # asserts and throwaway test passwords
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=app --cov-report=term-missing --cov-fail-under=70"
+
+[tool.coverage.run]
+# the entrypoint only wires logging and uvicorn; everything else is measured
+omit = ["app/__main__.py"]

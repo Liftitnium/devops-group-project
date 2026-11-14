@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LiftLog</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>LiftLog</h1>
+    <p>Log your lifts. Get told what to lift next time.</p>
+
+    <section aria-labelledby="status-heading">
+      <h2 id="status-heading">Service status</h2>
+      <ul id="status" aria-live="polite">
+        <li data-service="workouts">Workouts service: <span>checking…</span></li>
+        <li data-service="progress">Progress service: <span>checking…</span></li>
+      </ul>
+    </section>
+  </main>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
