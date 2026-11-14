@@ -1,0 +1,213 @@
+name: pipeline
+
+# CI on every pull request and push; CD (images to GHCR, deploy to Azure, health check)
+# only on main, and only after every CI job passed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  # superseded PR runs are cancelled; a deploy to main is never cut off halfway
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        service: [workouts, progress]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff==0.17.5
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        service: [workouts, progress]
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2025-CU10-GDR1-ubuntu-22.04
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: CiOnly-Passw0rd   # throwaway database inside the CI runner, never Azure
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P CiOnly-Passw0rd -C -b -Q 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 20s
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    env:
+      TEST_DATABASE_URL: mssql://sa:CiOnly-Passw0rd@localhost:1433/liftlog_test_${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements-dev.txt
+      # coverage threshold (70%) is set in pyproject.toml, so it fails the same way locally
+      - run: python -m pytest
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt
+
+  secrets-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scan the whole history, not just the last commit
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --verbose
+
+  images:
+    needs: [lint, test, secrets-scan]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        service: [workouts, progress]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      # GHCR image names must be lowercase (the owner is Liftitnium)
+      - run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # PRs build the image (proves the Dockerfile works); only main pushes it
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          build-args: GIT_SHA=${{ github.sha }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ env.OWNER }}/liftlog-${{ matrix.service }}:${{ github.sha }}
+
+  # The one check the main ruleset requires. It runs even when a job above failed
+  # (if: always()), because a skipped required check would count as passing.
+  ci:
+    name: ci
+    needs: [lint, test, secrets-scan, images]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All CI jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || { echo "::error::a CI job did not succeed ($r)"; exit 1; }
+          done
+
+  deploy:
+    needs: ci
+    # skipped until infra/setup.sh has run and the repository variables exist
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_PREFIX != ''
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+      PREFIX: ${{ vars.AZURE_PREFIX }}
+      SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # new revision per service; migrations run when the new container starts
+      - name: Deploy services
+        run: |
+          for svc in workouts progress; do
+            az containerapp update -g "$RG" -n "${PREFIX}-${svc}" \
+              --image "ghcr.io/${OWNER}/liftlog-${svc}:${SHA}" --output none
+          done
+
+      - name: Look up URLs
+        run: |
+          for svc in workouts progress; do
+            fqdn=$(az containerapp show -g "$RG" -n "${PREFIX}-${svc}" --query properties.configuration.ingress.fqdn -o tsv)
+            echo "${svc^^}_URL=https://${fqdn}" >> "$GITHUB_ENV"
+          done
+          echo "UI_URL=https://$(az staticwebapp show -g "$RG" -n "${PREFIX}-ui" --query defaultHostname -o tsv)" >> "$GITHUB_ENV"
+          token=$(az staticwebapp secrets list -g "$RG" -n "${PREFIX}-ui" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "SWA_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # same code as local; only the service URLs differ
+      - name: Point the UI at Azure
+        run: |
+          cat > ui/config.js <<EOF
+          window.LIFTLOG_CONFIG = {
+            workoutsUrl: "${WORKOUTS_URL}",
+            progressUrl: "${PROGRESS_URL}",
+          };
+          EOF
+
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
+          action: upload
+          app_location: ui
+          skip_app_build: true
+
+      # Scale-to-zero and a paused database make the first answer slow, so retry for
+      # up to 5 minutes. Passing means the NEW revision answers: /health reports this SHA.
+      - name: Health check
+        run: |
+          for url in "$WORKOUTS_URL" "$PROGRESS_URL"; do
+            for attempt in $(seq 1 30); do
+              body=$(curl -s --max-time 20 "${url}/health" || true)
+              if echo "$body" | grep -q '"status":"ok"' && echo "$body" | grep -q "$SHA"; then
+                echo "OK ${url}: ${body}"
+                continue 2
+              fi
+              echo "waiting for ${url} (attempt ${attempt}/30): ${body:-no answer}"
+              sleep 10
+            done
+            echo "::error::${url}/health did not return 200 with version ${SHA} in time"
+            exit 1
+          done
+
+      - name: UI smoke test
+        run: curl -sSf --max-time 20 "$UI_URL" | grep -q "LiftLog"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed ${SHA}"
+            echo "- UI: ${UI_URL}"
+            echo "- workouts: ${WORKOUTS_URL}/health"
+            echo "- progress: ${PROGRESS_URL}/health"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,67 @@
+// Log Analytics queries for the dashboard and the SLO (brief §6).
+// Run them in the Container Apps environment's workspace (<prefix>-logs), then save each
+// one ("Save as query") and pin it to the dashboard or add it to a Workbook.
+//
+// Every service logs one JSON line per request (app/logs.py):
+//   {"time", "level", "service", "logger", "msg", "method", "path", "status", "duration_ms"}
+// Container Apps puts that line in ContainerAppConsoleLogs_CL.Log_s.
+// /health is excluded everywhere: it is the pipeline's probe, not user traffic.
+
+
+// ---------- 1. Request count per service, 5-minute bins ----------
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend e = parse_json(Log_s)
+| where isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| summarize requests = count() by service = tostring(e.service), bin(TimeGenerated, 5m)
+| render timechart
+
+
+// ---------- 2. Error rate (5xx) per service, 5-minute bins ----------
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend e = parse_json(Log_s)
+| where isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| summarize total = count(), errors = countif(toint(e.status) >= 500)
+    by service = tostring(e.service), bin(TimeGenerated, 5m)
+| extend error_rate_pct = round(100.0 * errors / total, 2)
+| project TimeGenerated, service, error_rate_pct
+| render timechart
+
+
+// ---------- 3. Response time p50 / p95 / p99 (ms) per service ----------
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend e = parse_json(Log_s)
+| where isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| summarize percentiles(todouble(e.duration_ms), 50, 95, 99)
+    by service = tostring(e.service), bin(TimeGenerated, 15m)
+| render timechart
+
+
+// ---------- 4. SLO (DRAFT, the team decides the final wording) ----------
+// "99% of GET requests to the workouts API are answered successfully in under 500 ms,
+//  measured over 7 days."
+// Cold starts (scale from zero) count against the budget on purpose: users feel them.
+let target = 99.0;
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend e = parse_json(Log_s)
+| where tostring(e.service) == "workouts" and tostring(e.method) == "GET"
+    and isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| summarize total = count(),
+            good = countif(toint(e.status) < 500 and todouble(e.duration_ms) < 500)
+| extend sli_pct = round(100.0 * good / total, 2),
+         target_pct = target,
+         error_budget_left = round(total * (1 - target / 100) - (total - good), 0)
+| extend met = sli_pct >= target_pct
+
+
+// ---------- 5. Recent errors, for debugging ----------
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend e = parse_json(Log_s)
+| where tostring(e.level) in ("ERROR", "WARNING")
+| project TimeGenerated, service = tostring(e.service), level = tostring(e.level), msg = tostring(e.msg)
+| order by TimeGenerated desc
+| take 50

@@ -1,0 +1,91 @@
+# The whole system locally, with one command:   docker compose up --build
+# Secrets come from .env (copy .env.example and fill it in); none are in this file.
+#
+#   UI        http://localhost:8080   static files served by nginx
+#   workouts  http://localhost:8001   /docs, /health
+#   progress  http://localhost:8002   /docs, /health
+#
+# The services find each other by compose service name (progress -> http://workouts:8000).
+# Stop one (docker compose stop workouts) and the other keeps answering.
+name: liftlog
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-CU10-GDR1-ubuntu-22.04
+    platform: linux/amd64   # no arm64 build; on Apple Silicon this needs Docker's Rosetta emulation
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD:?set SA_PASSWORD in .env (see .env.example)}
+    ports:
+      - "127.0.0.1:1433:1433"   # only for running the tests from the host
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # one-off: creates the two databases and logins, then exits 0
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2025-CU10-GDR1-ubuntu-22.04
+    platform: linux/amd64
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQLCMDPASSWORD: ${SA_PASSWORD}
+      WORKOUTS_DB_PASSWORD: ${WORKOUTS_DB_PASSWORD:?set WORKOUTS_DB_PASSWORD in .env}
+      PROGRESS_DB_PASSWORD: ${PROGRESS_DB_PASSWORD:?set PROGRESS_DB_PASSWORD in .env}
+    volumes:
+      - ./db/init.sql:/init/init.sql:ro
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sqlserver", "-U", "sa", "-C", "-b", "-i", "/init/init.sql"]
+    restart: "no"
+
+  workouts:
+    build:
+      context: services/workouts
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    image: liftlog-workouts:local
+    environment:
+      DATABASE_URL: mssql://workouts_app:${WORKOUTS_DB_PASSWORD}@sqlserver:1433/liftlog_workouts
+      ALLOWED_ORIGINS: http://localhost:8080
+    ports:
+      - "8001:8000"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  progress:
+    build:
+      context: services/progress
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    image: liftlog-progress:local
+    environment:
+      DATABASE_URL: mssql://progress_app:${PROGRESS_DB_PASSWORD}@sqlserver:1433/liftlog_progress
+      ALLOWED_ORIGINS: http://localhost:8080
+      WORKOUTS_URL: http://workouts:8000
+      WORKOUTS_TIMEOUT_S: "3"
+    ports:
+      - "8002:8000"
+    # deliberately not depends_on workouts: progress starts and answers without it
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ui:
+    image: nginx:1.30.6-alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  sqlserver-data:
