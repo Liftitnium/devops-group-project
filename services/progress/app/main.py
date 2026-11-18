@@ -1,8 +1,8 @@
 """The progress service: goals, personal records and next-session recommendations, in its own
 database. It reads workout history from the workouts service over HTTP (app/gateway.py).
 
-Skeleton: platform only (health, request logging, CORS, migrations on startup, error
-mapping). Domain routers are added by including them at the bottom of create_app.
+Platform (health, request logging, CORS, migrations on startup, error mapping) plus the
+domain routers included at the bottom of create_app.
 """
 
 import logging
@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.coach_api import router as coach_router
 from app.config import SERVICE_NAME, Settings, load_settings
 from app.db import check_health, connect, migrate
 from app.errors import DomainError
@@ -97,5 +98,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return {"status": "ok", "db": "ok", "version": settings.version}
 
-    # app.include_router(progress_router)  <- domain routes go here
+    app.include_router(coach_router)
     return app
