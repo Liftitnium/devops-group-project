@@ -67,8 +67,29 @@ logs: need regex parsing in every query.
 
 **Consequences.** Dashboard and SLO queries are simple `parse_json` + `summarize`.
 
-## ADR-5: Next-session recommendation (TODO, progress owner)
+## ADR-5: Next-session recommendation by double progression
 
-Context, the double-progression rule, alternatives (1RM-based percentages, RPE), consequences.
+**Status:** accepted (2026-11-18)
+
+**Context.** Our feature beyond CRUD tells a lifter what to do next session for an exercise.
+It has to be explainable in one sentence, testable without a database, and work from data
+we already log (weight and reps per set, a rep range per exercise).
+
+**Decision.** Use double progression on the working sets (the heaviest weight) of the last
+session. If every working set reached the top of the rep range, add 2.5 kg (upper body) or
+5 kg (lower body) and aim for the bottom of the range. If every working set fell below the
+range, drop about 10%, rounded down to 2.5 kg. Otherwise keep the weight and aim for one more
+rep than the weakest set. The rule is a pure function in `services/progress/app/coach.py`;
+the endpoint only fetches history and formats the answer. Nothing is stored, so a
+recommendation is always consistent with the latest history.
+
+**Alternatives.** Percentages of an estimated one-rep max (rejected by the team: estimates
+are noisy at higher reps and need a formula users can't check). RPE-based autoregulation
+(needs the user to log effort per set, more input than an MVP should ask for). A trained
+model (no data to train it on).
+
+**Consequences.** Depends on the workouts history endpoint (`docs/api.md`); when workouts
+is down the coach answers 503 with a readable message and logging keeps working. Increments
+are fixed per body part, so very light or very heavy exercises progress less precisely.
 
 ## ADR-6: _optional, e.g. frontend choice or authentication_
