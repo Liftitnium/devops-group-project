@@ -7,19 +7,76 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <main>
+  <header>
     <h1>LiftLog</h1>
     <p>Log your lifts. Get told what to lift next time.</p>
+    <ul id="status" class="status" aria-live="polite">
+      <li data-service="workouts">Workouts: <span>checking…</span></li>
+      <li data-service="progress">Progress: <span>checking…</span></li>
+    </ul>
+  </header>
 
-    <section aria-labelledby="status-heading">
-      <h2 id="status-heading">Service status</h2>
-      <ul id="status" aria-live="polite">
-        <li data-service="workouts">Workouts service: <span>checking…</span></li>
-        <li data-service="progress">Progress service: <span>checking…</span></li>
-      </ul>
+  <main>
+    <p class="banner" role="note">Showing sample data. Saving is not connected to the services yet.</p>
+
+    <section aria-labelledby="log-heading">
+      <h2 id="log-heading">Log a workout</h2>
+      <form id="log-form">
+        <div class="row">
+          <label>Date <input type="date" name="performed_on" required></label>
+          <label class="grow">Notes <input type="text" name="notes" maxlength="500" placeholder="optional"></label>
+        </div>
+        <fieldset>
+          <legend>Sets</legend>
+          <div id="set-rows"></div>
+          <button type="button" id="add-set" class="secondary">+ Add set</button>
+        </fieldset>
+        <button type="submit">Save workout</button>
+        <p class="message" id="log-message" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section aria-labelledby="next-heading">
+      <h2 id="next-heading">Next session</h2>
+      <label>Exercise <select id="next-exercise"></select></label>
+      <div id="next-card" class="card" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="workouts-heading">
+      <h2 id="workouts-heading">Past workouts</h2>
+      <ul id="workout-list" class="list"></ul>
+    </section>
+
+    <section aria-labelledby="exercises-heading">
+      <h2 id="exercises-heading">Exercises</h2>
+      <ul id="exercise-list" class="list"></ul>
+      <form id="exercise-form" class="row">
+        <label class="grow">Name <input type="text" name="name" required maxlength="100"></label>
+        <label>Body
+          <select name="body_part">
+            <option value="upper">upper</option>
+            <option value="lower">lower</option>
+          </select>
+        </label>
+        <label>Reps from <input type="number" name="rep_range_min" min="1" max="100" value="8" required></label>
+        <label>to <input type="number" name="rep_range_max" min="1" max="100" value="12" required></label>
+        <button type="submit">Add exercise</button>
+      </form>
+      <p class="message" id="exercise-message" aria-live="polite"></p>
     </section>
   </main>
+
+  <template id="set-row">
+    <div class="row set-row">
+      <label class="grow">Exercise <select name="exercise_id" required></select></label>
+      <label>kg <input type="number" name="weight_kg" min="0" max="1000" step="0.5" required></label>
+      <label>Reps <input type="number" name="reps" min="1" max="100" required></label>
+      <button type="button" class="secondary remove-set" aria-label="Remove set">✕</button>
+    </div>
+  </template>
+
   <script src="config.js"></script>
+  <script src="sample-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
