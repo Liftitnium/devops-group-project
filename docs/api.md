@@ -59,6 +59,10 @@ service is down, and `502` if the answer does not match this shape.
 }
 ```
 
+`404` with `{"detail": "Exercise 3 not found."}` when the exercise does not exist,
+`503` when the workouts service is down, `502` when it sends unusable data. Every error
+has a `detail` the UI can show as-is.
+
 `action` is one of `increase_weight`, `add_reps`, `deload`, `no_history`. With
 `no_history`, `based_on`, `weight_kg`, `target_reps` and `sets` are `null` and `reason`
 says what to do instead. Show `reason` to the user as-is.

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.coach import Action, PerformedSet, next_session
-from app.errors import UpstreamUnavailableError
+from app.errors import NotFoundError, UpstreamUnavailableError
 from app.main import create_app
 
 
@@ -57,6 +57,12 @@ def test_every_set_below_the_range_deloads_ten_percent_rounded_to_plates():
     rec = next_session(sets(83, 6, 5, 5), 8, 12, "upper")
     # 83 * 0.9 = 74.7 -> 72.5 (down to a multiple of 2.5 kg)
     assert (rec.action, rec.weight_kg, rec.target_reps) == (Action.DELOAD, Decimal("72.5"), 8)
+
+
+@pytest.mark.parametrize(("weight", "expected"), [("4", "2.5"), ("2.5", "2.5"), ("2", "2")])
+def test_deload_never_goes_below_the_lightest_plate_step(weight, expected):
+    rec = next_session(sets(weight, 3, 3), 8, 12, "upper")
+    assert (rec.action, rec.weight_kg) == (Action.DELOAD, Decimal(expected))
 
 
 def test_only_the_heaviest_sets_count_warmups_are_ignored():
@@ -156,3 +162,10 @@ def test_endpoint_503_with_a_readable_message_when_workouts_is_down():
     response = client_with(fake).get("/exercises/3/next-session")
     assert response.status_code == 503
     assert response.json() == {"detail": "The workouts service is unavailable right now."}
+
+
+def test_endpoint_404_names_the_exercise_when_workouts_does_not_know_it():
+    fake = FakeWorkouts(error=NotFoundError("not found in the workouts service"))
+    response = client_with(fake).get("/exercises/42/next-session")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Exercise 42 not found."}

@@ -78,7 +78,8 @@ def next_session(last_sets: list[PerformedSet], rep_min: int, rep_max: int, body
         )
 
     if max(working) < rep_min:
-        new_weight = max(_round_down_to_plates(weight * DELOAD), Decimal(0))
+        # never below the lightest plate step (or the current weight, if already lighter)
+        new_weight = max(_round_down_to_plates(weight * DELOAD), min(weight, PLATE_STEP))
         return Recommendation(
             Action.DELOAD,
             new_weight,

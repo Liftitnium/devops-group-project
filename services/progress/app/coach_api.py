@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ValidationError
 
 from app.coach import Action, PerformedSet, next_session
-from app.errors import UpstreamError
+from app.errors import NotFoundError, UpstreamError
 
 router = APIRouter()
 
@@ -55,7 +55,10 @@ class NextSession(BaseModel):
 
 @router.get("/exercises/{exercise_id}/next-session", response_model=NextSession)
 def get_next_session(exercise_id: int, request: Request) -> NextSession:
-    raw = request.app.state.workouts.get_json(f"/exercises/{exercise_id}/history", {"limit": 1})
+    try:
+        raw = request.app.state.workouts.get_json(f"/exercises/{exercise_id}/history", {"limit": 1})
+    except NotFoundError as e:
+        raise NotFoundError(f"Exercise {exercise_id} not found.") from e
     try:
         history = _History.model_validate(raw)
         last = history.sessions[0] if history.sessions else None
