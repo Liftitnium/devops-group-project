@@ -1,15 +1,23 @@
-// LiftLog UI, running on sample data (window.SAMPLE). Every add, edit and delete works on
-// the page so the whole flow can be tried; each section is then wired to the services in
-// its own PR (#13 log, #14 history, #15 exercises, #16 next session).
-// Text from the data is always set with textContent, never innerHTML, so a workout note
-// can't inject HTML into the page.
+// LiftLog UI. Reads and writes through window.api (api.js): exercises (#15), logging and
+// editing workouts (#13), history (#14) and the next-session coach (#16).
+// Text from the services is always set with textContent, never innerHTML, so a workout
+// note can't inject HTML into the page.
 
-const TIMEOUT_MS = 5000;
+const HEALTH_TIMEOUT_MS = 5000;
 const { workoutsUrl, progressUrl } = window.LIFTLOG_CONFIG;
-const state = structuredClone(window.SAMPLE);
+const api = window.api;
+
+const state = {
+  exercises: [], // GET /exercises
+  workouts: [], // GET /workouts: summaries with set_count, newest first
+  details: new Map(), // workout id -> GET /workouts/{id}, fetched when needed
+  coach: new Map(), // exercise id -> next-session answer (or { error })
+  loading: true,
+  loadError: null,
+};
 let editingWorkoutId = null;
 let editingExerciseId = null;
-let coachExerciseId = state.exercises[0]?.id ?? null;
+let coachExerciseId = null;
 const serviceDown = { workouts: false, progress: false };
 
 // --- helpers -------------------------------------------------------------------------------
@@ -39,7 +47,23 @@ function toast(text, kind = "ok") {
   node.className = `toast ${kind}`;
   node.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { node.hidden = true; }, 3500);
+  toastTimer = setTimeout(() => { node.hidden = true; }, kind === "error" ? 6000 : 3500);
+}
+
+// run an API call with a button disabled meanwhile; errors become a toast
+async function withButton(button, busyText, action) {
+  const text = button.textContent;
+  button.disabled = true;
+  button.textContent = busyText;
+  try {
+    return await action();
+  } catch (error) {
+    toast(error.message, "error");
+    return undefined;
+  } finally {
+    button.disabled = false;
+    button.textContent = text;
+  }
 }
 
 const toDate = (iso) => new Date(`${iso}T00:00:00`);
@@ -49,8 +73,51 @@ const monthShort = new Intl.DateTimeFormat(undefined, { month: "short" });
 const formatDate = (iso) => longDate.format(toDate(iso));
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const exerciseById = (id) => state.exercises.find((ex) => ex.id === Number(id));
-const nextId = (items) => Math.max(0, ...items.map((item) => item.id)) + 1;
 const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+
+// --- loading data --------------------------------------------------------------------------
+
+function lastSevenDays() {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(isoDay(d));
+  }
+  return days;
+}
+
+async function loadDetails(ids) {
+  const missing = ids.filter((id) => !state.details.has(id));
+  const workouts = await Promise.all(missing.map((id) => api.getWorkout(id)));
+  for (const w of workouts) state.details.set(w.id, w);
+}
+
+// everything the home page needs: exercises, workout list, and the sets of this week's
+// workouts plus the few shown under Recent (the list endpoint only gives set counts)
+async function loadAll() {
+  try {
+    const [exercises, workouts] = await Promise.all([api.listExercises(), api.listWorkouts()]);
+    state.exercises = exercises;
+    state.workouts = workouts;
+    state.details.clear();
+    state.coach.clear();
+    const week = new Set(lastSevenDays());
+    await loadDetails(workouts.filter((w, i) => i < 5 || week.has(w.performed_on)).map((w) => w.id));
+    state.loadError = null;
+  } catch (error) {
+    state.loadError = error.message;
+  }
+  state.loading = false;
+  renderAll();
+}
+
+function renderAll() {
+  renderExercises();
+  renderWorkouts();
+  renderHome();
+  renderLogHint();
+}
 
 // --- navigation (one page, four views, the URL hash says which) -----------------------------
 
@@ -83,7 +150,7 @@ async function checkHealth(name, baseUrl) {
   const item = document.querySelector(`[data-service="${name}"]`);
   const label = item.querySelector(".state");
   try {
-    const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
     serviceDown[name] = !response.ok;
     label.textContent = response.ok ? "up" : "database down";
   } catch (error) {
@@ -111,16 +178,6 @@ function renderGreeting() {
   document.getElementById("greeting").textContent = `Good ${part} 👋`;
 }
 
-function lastSevenDays() {
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(isoDay(d));
-  }
-  return days;
-}
-
 function sparkline(values) {
   const max = Math.max(1, ...values);
   const points = values.map((v, i) => [(i / (values.length - 1)) * 100, 28 - (v / max) * 24]);
@@ -132,11 +189,12 @@ function sparkline(values) {
 
 function renderStats() {
   const days = lastSevenDays();
-  const setsPerDay = days.map((day) =>
-    state.workouts.filter((w) => w.performed_on === day).reduce((n, w) => n + w.sets.length, 0));
-  const volumePerDay = days.map((day) =>
-    state.workouts.filter((w) => w.performed_on === day)
-      .reduce((n, w) => n + w.sets.reduce((m, s) => m + s.weight_kg * s.reps, 0), 0));
+  const onDay = (day) => state.workouts.filter((w) => w.performed_on === day);
+  const setsPerDay = days.map((day) => onDay(day).reduce((n, w) => n + w.set_count, 0));
+  const volumePerDay = days.map((day) => onDay(day).reduce((n, w) => {
+    const detail = state.details.get(w.id);
+    return n + (detail ? detail.sets.reduce((m, s) => m + s.weight_kg * s.reps, 0) : 0);
+  }, 0));
   const sum = (xs) => xs.reduce((a, b) => a + b, 0);
   const card = (icon, label, value, unit, values, hint) =>
     el("div", { class: "stat" },
@@ -160,14 +218,19 @@ const ACTION_LABEL = {
   no_history: "First session",
 };
 
-function recommendationFor(ex) {
-  return state.nextSession[ex.id] ?? {
-    action: "no_history", weight_kg: null, target_reps: null, sets: null, based_on: null,
-    reason: `No sessions logged for this exercise yet. Pick a weight you can lift for ${ex.rep_range_min} reps and log it.`,
-  };
+async function loadCoach(exerciseId) {
+  if (state.coach.has(exerciseId)) return;
+  state.coach.set(exerciseId, { loading: true });
+  try {
+    state.coach.set(exerciseId, await api.nextSession(exerciseId));
+  } catch (error) {
+    state.coach.set(exerciseId, { error: error.message });
+  }
+  if (coachExerciseId === exerciseId) renderCoach();
 }
 
 function renderCoach() {
+  const card = document.getElementById("coach");
   const chips = document.getElementById("coach-chips");
   const body = document.getElementById("coach-body");
   if (!exerciseById(coachExerciseId)) coachExerciseId = state.exercises[0]?.id ?? null;
@@ -177,13 +240,35 @@ function renderCoach() {
       "aria-selected": String(ex.id === coachExerciseId),
       onclick: () => { coachExerciseId = ex.id; renderCoach(); },
     }, ex.name)));
+  delete card.dataset.action;
   const ex = exerciseById(coachExerciseId);
   if (!ex) {
-    body.replaceChildren(el("p", { class: "coach-reason" }, "Add an exercise to get a suggestion."));
+    const message = state.loading ? "Loading…"
+      : state.loadError ? `${state.loadError} Suggestions come back as soon as it does.`
+      : "Add an exercise and log a session to get your first suggestion.";
+    const showAdd = !state.loading && !state.loadError;
+    body.replaceChildren(
+      el("h3", { class: "coach-name" }, "Your coach"),
+      el("p", { class: "coach-reason" }, message),
+      showAdd ? el("div", { class: "coach-foot" }, el("span", {}),
+        el("a", { href: "#exercises", class: "coach-cta" }, "Add exercise", el("span", { "aria-hidden": "true" }, " →"))) : null);
     return;
   }
-  const rec = recommendationFor(ex);
-  document.getElementById("coach").dataset.action = rec.action;
+  const rec = state.coach.get(ex.id);
+  if (!rec) loadCoach(ex.id);
+  if (!rec || rec.loading) {
+    body.replaceChildren(el("h3", { class: "coach-name" }, ex.name), el("p", { class: "coach-reason" }, "Asking the coach…"));
+    return;
+  }
+  if (rec.error) {
+    body.replaceChildren(
+      el("h3", { class: "coach-name" }, ex.name),
+      el("p", { class: "coach-reason" }, rec.error),
+      el("div", { class: "coach-foot" }, el("span", {}),
+        el("button", { type: "button", class: "coach-cta", onclick: () => { state.coach.delete(ex.id); renderCoach(); } }, "Try again")));
+    return;
+  }
+  card.dataset.action = rec.action;
   body.replaceChildren(
     el("span", { class: "coach-badge" }, ACTION_LABEL[rec.action] ?? rec.action),
     el("h3", { class: "coach-name" }, ex.name),
@@ -211,22 +296,36 @@ function logFromCoach(ex, rec) {
 
 function workoutSummary(w) {
   const date = toDate(w.performed_on);
-  const names = [...new Set(w.sets.map((s) => s.exercise_name))];
+  const detail = state.details.get(w.id);
+  const names = detail ? [...new Set(detail.sets.map((s) => s.exercise_name))].join(", ") : "";
   return [
     el("div", { class: "date-badge" },
       el("span", { class: "day" }, String(date.getDate())),
       el("span", { class: "month" }, monthShort.format(date))),
     el("div", { class: "grow" },
-      el("strong", {}, names.join(", ") || "No sets"),
-      el("span", { class: "meta" }, plural(w.sets.length, "set"), w.notes ? ` · ${w.notes}` : "")),
+      el("strong", {}, names || w.notes || "Workout"),
+      el("span", { class: "meta" }, plural(w.set_count, "set"), names && w.notes ? ` · ${w.notes}` : "")),
   ];
+}
+
+function statusItem(text, retry) {
+  return el("li", { class: "empty card" }, text, retry
+    ? el("div", {}, el("button", { type: "button", class: "ghost small retry", onclick: retry }, "Try again"))
+    : null);
+}
+
+function retryLoad() {
+  state.loading = true;
+  renderAll();
+  loadAll();
 }
 
 function renderRecent() {
   const list = document.getElementById("recent-list");
+  if (state.loading) return list.replaceChildren(statusItem("Loading…"));
+  if (state.loadError) return list.replaceChildren(statusItem(state.loadError, retryLoad));
   if (state.workouts.length === 0) {
-    list.replaceChildren(el("li", { class: "empty" }, "No workouts yet. Tap Log to add your first."));
-    return;
+    return list.replaceChildren(statusItem("No workouts yet. Tap Log to add your first."));
   }
   list.replaceChildren(...state.workouts.slice(0, 3).map((w) =>
     el("li", {}, el("a", { href: "#history", class: "recent-item" }, ...workoutSummary(w),
@@ -242,20 +341,22 @@ function renderHome() {
 // --- exercises -----------------------------------------------------------------------------
 
 function renderExercises() {
-  document.getElementById("exercise-list").replaceChildren(
-    ...state.exercises.map((ex) =>
+  const list = document.getElementById("exercise-list");
+  if (state.loading) list.replaceChildren(statusItem("Loading…"));
+  else if (state.loadError) list.replaceChildren(statusItem(state.loadError, retryLoad));
+  else if (state.exercises.length === 0) list.replaceChildren(statusItem("No exercises yet. Add your first one below."));
+  else {
+    list.replaceChildren(...state.exercises.map((ex) =>
       el("li", { class: ex.id === editingExerciseId ? "editing" : "" },
         el("span", { class: `body-dot ${ex.body_part}`, "aria-hidden": "true" }),
         el("div", { class: "grow" },
           el("strong", {}, ex.name),
           el("span", { class: "meta" }, `${ex.body_part === "upper" ? "Upper" : "Lower"} body · ${ex.rep_range_min}–${ex.rep_range_max} reps`)),
         el("button", { type: "button", class: "ghost small", onclick: () => editExercise(ex.id) }, "Edit"),
-        el("button", { type: "button", class: "ghost small danger", onclick: () => deleteExercise(ex.id) }, "Delete"),
-      ),
-    ),
-  );
+        el("button", { type: "button", class: "ghost small danger", onclick: (e) => deleteExercise(ex.id, e.currentTarget) }, "Delete"),
+      )));
+  }
   for (const select of document.querySelectorAll('select[name="exercise_id"]')) fillExerciseSelect(select);
-  renderCoach();
 }
 
 function fillExerciseSelect(select) {
@@ -289,22 +390,21 @@ function resetExerciseForm() {
   renderExercises();
 }
 
-function deleteExercise(id) {
+async function deleteExercise(id, button) {
   const ex = exerciseById(id);
-  // same rule as the API: 409 if any workout uses the exercise
-  if (state.workouts.some((w) => w.sets.some((s) => s.exercise_id === ex.id))) {
-    toast(`${ex.name} is used in a workout. Delete those workouts first.`, "error");
-    return;
-  }
   if (!confirm(`Delete ${ex.name}?`)) return;
-  state.exercises = state.exercises.filter((e) => e.id !== ex.id);
-  delete state.nextSession[ex.id];
+  // the service refuses (409, with a readable message) if any workout uses it
+  const done = await withButton(button, "…", async () => {
+    await api.deleteExercise(ex.id);
+    return true;
+  });
+  if (!done) return;
   if (editingExerciseId === ex.id) resetExerciseForm();
-  else renderExercises();
   toast(`Deleted ${ex.name}.`);
+  await loadAll();
 }
 
-document.getElementById("exercise-form").addEventListener("submit", (event) => {
+document.getElementById("exercise-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
   const exercise = {
@@ -313,35 +413,29 @@ document.getElementById("exercise-form").addEventListener("submit", (event) => {
     rep_range_min: Number(form.rep_range_min.value),
     rep_range_max: Number(form.rep_range_max.value),
   };
+  // checked here too for a friendlier sentence; the service checks it again
   if (exercise.rep_range_min > exercise.rep_range_max) {
     toast("The lowest rep count can't be higher than the highest.", "error");
     return;
   }
-  const clash = state.exercises.find(
-    (ex) => ex.name.toLowerCase() === exercise.name.toLowerCase() && ex.id !== editingExerciseId,
-  );
-  if (clash) {
-    toast(`There is already an exercise called ${clash.name}.`, "error");
-    return;
-  }
-  if (editingExerciseId) {
-    Object.assign(exerciseById(editingExerciseId), exercise);
-    for (const w of state.workouts) {
-      for (const s of w.sets) if (s.exercise_id === editingExerciseId) s.exercise_name = exercise.name;
-    }
-    toast(`Saved ${exercise.name}.`);
-  } else {
-    state.exercises.push({ id: nextId(state.exercises), ...exercise });
-    toast(`Added ${exercise.name}.`);
-  }
-  state.exercises.sort((a, b) => a.name.localeCompare(b.name));
+  const wasEditing = editingExerciseId;
+  const saved = await withButton(document.getElementById("save-exercise"), "Saving…", () =>
+    wasEditing ? api.updateExercise(wasEditing, exercise) : api.createExercise(exercise));
+  if (!saved) return;
+  toast(wasEditing ? `Saved ${saved.name}.` : `Added ${saved.name}.`);
   resetExerciseForm();
-  renderWorkouts();
+  await loadAll();
 });
 
 document.getElementById("cancel-exercise-edit").addEventListener("click", resetExerciseForm);
 
 // --- log or edit a workout -----------------------------------------------------------------
+
+function renderLogHint() {
+  const noExercises = !state.loading && !state.loadError && state.exercises.length === 0;
+  document.getElementById("log-hint").hidden = !noExercises;
+  document.getElementById("save-workout").disabled = noExercises || Boolean(state.loadError);
+}
 
 function addSetRow(values = {}) {
   const row = document.getElementById("set-row").content.firstElementChild.cloneNode(true);
@@ -368,8 +462,13 @@ function resetLogForm() {
   document.getElementById("cancel-workout-edit").hidden = true;
 }
 
-function editWorkout(id) {
-  const workout = state.workouts.find((w) => w.id === id);
+async function editWorkout(id, button) {
+  const ok = await withButton(button, "…", async () => {
+    await loadDetails([id]);
+    return true;
+  });
+  if (!ok) return;
+  const workout = state.details.get(id);
   const form = document.getElementById("log-form");
   editingWorkoutId = id;
   form.performed_on.value = workout.performed_on;
@@ -382,13 +481,17 @@ function editWorkout(id) {
   go("log");
 }
 
-function deleteWorkout(id) {
+async function deleteWorkout(id, button) {
   const workout = state.workouts.find((w) => w.id === id);
   if (!confirm(`Delete the workout from ${formatDate(workout.performed_on)}?`)) return;
-  state.workouts = state.workouts.filter((w) => w.id !== id);
+  const done = await withButton(button, "…", async () => {
+    await api.deleteWorkout(id);
+    return true;
+  });
+  if (!done) return;
   if (editingWorkoutId === id) resetLogForm();
-  renderWorkouts();
   toast("Workout deleted.");
+  await loadAll();
 }
 
 document.getElementById("add-set").addEventListener("click", () => {
@@ -406,11 +509,10 @@ document.getElementById("cancel-workout-edit").addEventListener("click", () => {
   go("history");
 });
 
-document.getElementById("log-form").addEventListener("submit", (event) => {
+document.getElementById("log-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
-  // this body is exactly what #13 will POST to /workouts (PUT /workouts/{id} when editing)
-  const body = {
+  const workout = {
     performed_on: form.performed_on.value,
     notes: form.notes.value.trim(),
     sets: [...form.querySelectorAll(".set-row")].map((row) => ({
@@ -419,59 +521,65 @@ document.getElementById("log-form").addEventListener("submit", (event) => {
       reps: Number(row.querySelector('[name="reps"]').value),
     })),
   };
-  // what the API sends back: sets numbered per exercise, in the order sent
-  const counter = {};
-  const sets = body.sets.map((s) => ({
-    ...s,
-    exercise_name: exerciseById(s.exercise_id).name,
-    set_number: (counter[s.exercise_id] = (counter[s.exercise_id] ?? 0) + 1),
-  }));
-  const wasEditing = Boolean(editingWorkoutId);
-  if (wasEditing) {
-    Object.assign(state.workouts.find((w) => w.id === editingWorkoutId), { ...body, sets });
-  } else {
-    state.workouts.push({ id: nextId(state.workouts), ...body, sets });
-  }
-  state.workouts.sort((a, b) => b.performed_on.localeCompare(a.performed_on) || b.id - a.id);
+  const wasEditing = editingWorkoutId;
+  const saved = await withButton(document.getElementById("save-workout"), "Saving…", () =>
+    wasEditing ? api.updateWorkout(wasEditing, workout) : api.createWorkout(workout));
+  if (!saved) return;
   resetLogForm();
-  renderWorkouts();
-  toast(wasEditing ? "Workout updated." : `Workout saved with ${plural(sets.length, "set")}.`);
+  toast(wasEditing ? "Workout updated." : `Workout saved with ${plural(saved.sets.length, "set")}.`);
   go(wasEditing ? "history" : "home");
+  await loadAll();
 });
 
 // --- history -------------------------------------------------------------------------------
 
-function renderWorkouts() {
-  const list = document.getElementById("workout-list");
-  renderHome();
-  if (state.workouts.length === 0) {
-    list.replaceChildren(el("li", { class: "empty card" }, "No workouts yet. Tap Log to add your first."));
+function workoutBody(w) {
+  const detail = state.details.get(w.id);
+  if (!detail) return el("p", { class: "muted" }, "Loading sets…");
+  return el("div", {},
+    el("table", { class: "set-table" },
+      el("tbody", {}, ...detail.sets.map((s) =>
+        el("tr", {},
+          el("td", {}, s.exercise_name),
+          el("td", { class: "muted" }, `Set ${s.set_number}`),
+          el("td", { class: "right" }, el("strong", {}, `${s.weight_kg} kg`), ` × ${s.reps}`))))),
+    el("div", { class: "actions" },
+      el("button", { type: "button", class: "ghost small", onclick: (e) => editWorkout(w.id, e.currentTarget) }, "Edit"),
+      el("button", { type: "button", class: "ghost small danger", onclick: (e) => deleteWorkout(w.id, e.currentTarget) }, "Delete")));
+}
+
+// sets of older workouts are fetched the first time the row is opened
+async function onToggle(event, w) {
+  const details = event.currentTarget;
+  if (!details.open || state.details.has(w.id)) return;
+  try {
+    await loadDetails([w.id]);
+  } catch (error) {
+    details.querySelector(".workout-body").replaceChildren(el("p", { class: "muted" }, error.message));
     return;
   }
-  list.replaceChildren(
-    ...state.workouts.map((w) =>
-      el("li", {},
-        el("details", { class: "card" },
-          el("summary", {}, ...workoutSummary(w), el("span", { class: "chevron", "aria-hidden": "true" }, "›")),
-          el("div", { class: "workout-body" },
-            el("table", { class: "set-table" },
-              el("tbody", {}, ...w.sets.map((s) =>
-                el("tr", {},
-                  el("td", {}, s.exercise_name),
-                  el("td", { class: "muted" }, `Set ${s.set_number}`),
-                  el("td", { class: "right" }, el("strong", {}, `${s.weight_kg} kg`), ` × ${s.reps}`))))),
-            el("div", { class: "actions" },
-              el("button", { type: "button", class: "ghost small", onclick: () => editWorkout(w.id) }, "Edit"),
-              el("button", { type: "button", class: "ghost small danger", onclick: () => deleteWorkout(w.id) }, "Delete")))))),
-  );
+  details.querySelector("summary").replaceChildren(...workoutSummary(w), el("span", { class: "chevron", "aria-hidden": "true" }, "›"));
+  details.querySelector(".workout-body").replaceChildren(workoutBody(w));
+}
+
+function renderWorkouts() {
+  const list = document.getElementById("workout-list");
+  if (state.loading) return list.replaceChildren(statusItem("Loading…"));
+  if (state.loadError) return list.replaceChildren(statusItem(state.loadError, retryLoad));
+  if (state.workouts.length === 0) return list.replaceChildren(statusItem("No workouts yet. Tap Log to add your first."));
+  list.replaceChildren(...state.workouts.map((w) =>
+    el("li", {},
+      el("details", { class: "card", ontoggle: (e) => onToggle(e, w) },
+        el("summary", {}, ...workoutSummary(w), el("span", { class: "chevron", "aria-hidden": "true" }, "›")),
+        el("div", { class: "workout-body" }, workoutBody(w))))));
 }
 
 // --- start ---------------------------------------------------------------------------------
 
 renderGreeting();
-renderExercises();
 resetLogForm();
-renderWorkouts();
+renderAll();
 showView(location.hash.slice(1));
+loadAll();
 checkHealth("workouts", workoutsUrl);
 checkHealth("progress", progressUrl);

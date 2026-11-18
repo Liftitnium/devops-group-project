@@ -28,7 +28,6 @@
       </header>
 
       <p id="outage" class="outage" role="alert" hidden></p>
-      <p class="sample-note">Sample data: changes stay on this page and are not saved yet.</p>
 
       <div class="section-head"><h2>This week</h2></div>
       <div class="stat-cards" id="stat-cards"></div>
@@ -52,6 +51,7 @@
         <h1 id="log-heading">Log a workout</h1>
         <button type="button" id="cancel-workout-edit" class="ghost small" hidden>Cancel edit</button>
       </header>
+      <p id="log-hint" class="hint" hidden>Add an exercise first, then log sets against it. <a href="#exercises">Go to Exercises →</a></p>
       <form id="log-form" class="card">
         <div class="field-row">
           <label>Date <input type="date" name="performed_on" required></label>
@@ -118,7 +118,7 @@
   </template>
 
   <script src="config.js"></script>
-  <script src="sample-data.js"></script>
+  <script src="api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

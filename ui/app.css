@@ -216,3 +216,11 @@ button.icon:hover { color: var(--danger); border-color: var(--danger); }
 @media (min-width: 700px) {
   .app { padding-top: 2rem; }
 }
+
+/* loading, empty and error states ----------------------------------------------------- */
+.hint { margin-bottom: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 16px; background: var(--accent-soft); font-size: 0.88rem; }
+.hint a { color: var(--accent); font-weight: 700; }
+.exercises li.empty { display: block; border: 0; box-shadow: none; background: transparent; }
+.retry { margin-top: 0.6rem; }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+a.coach-cta { display: inline-block; }
