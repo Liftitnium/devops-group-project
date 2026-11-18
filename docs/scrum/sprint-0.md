@@ -18,7 +18,7 @@ Items selected (no GitHub Project existed yet; these are the parts of the sprint
 - [ ] Initial Product Backlog in GitHub Projects
 - [ ] Team repository with branch protection
 - [ ] Definition of Done written
-- [ ] Local skeleton: `docker compose up` returns a page and `/health`
+- [ ] Local skeleton: `docker compose up` returns a page or `/health`
 
 ## Review
 
