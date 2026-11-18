@@ -2,95 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>LiftLog</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" />
-        </svg>
-        <span>LiftLog</span>
-      </div>
-      <ul id="status" class="status" aria-live="polite">
-        <li data-service="workouts"><span class="dot"></span>Workouts <span class="state">checking…</span></li>
-        <li data-service="progress"><span class="dot"></span>Progress <span class="state">checking…</span></li>
-      </ul>
-    </div>
-  </header>
+  <div class="app">
+    <!-- Home -------------------------------------------------------------------------- -->
+    <section id="view-home" class="view" aria-labelledby="greeting">
+      <header class="greet">
+        <div class="avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" /></svg>
+        </div>
+        <div class="grow">
+          <h1 id="greeting">Hello</h1>
+          <p class="muted">Ready to beat last time?</p>
+        </div>
+        <ul id="status" class="status" aria-live="polite" aria-label="Service status">
+          <li data-service="workouts" title="Workouts service"><span class="dot"></span>Workouts <span class="state">checking</span></li>
+          <li data-service="progress" title="Progress service"><span class="dot"></span>Progress <span class="state">checking</span></li>
+        </ul>
+      </header>
 
-  <main>
-    <section class="hero">
-      <div>
-        <h1>Log your lifts. Get told what to lift next time.</h1>
-        <p class="sample-note">Sample data: changes stay on this page and are not saved yet.</p>
+      <p id="outage" class="outage" role="alert" hidden></p>
+      <p class="sample-note">Sample data: changes stay on this page and are not saved yet.</p>
+
+      <div class="section-head"><h2>This week</h2></div>
+      <div class="stat-cards" id="stat-cards"></div>
+
+      <div class="section-head"><h2>Next session</h2></div>
+      <article id="coach" class="coach" aria-live="polite">
+        <div class="chips" id="coach-chips" role="tablist" aria-label="Exercise"></div>
+        <div id="coach-body"></div>
+      </article>
+
+      <div class="section-head">
+        <h2>Recent</h2>
+        <a href="#history" class="see-all">See all</a>
       </div>
-      <dl class="stats" id="stats"></dl>
+      <ul id="recent-list" class="recent"></ul>
     </section>
 
-    <div class="grid">
-      <div class="col">
-        <section class="panel" aria-labelledby="log-heading">
-          <div class="panel-head">
-            <h2 id="log-heading">Log a workout</h2>
-            <button type="button" id="cancel-workout-edit" class="ghost" hidden>Cancel edit</button>
+    <!-- Log --------------------------------------------------------------------------- -->
+    <section id="view-log" class="view" aria-labelledby="log-heading" hidden>
+      <header class="page-head">
+        <h1 id="log-heading">Log a workout</h1>
+        <button type="button" id="cancel-workout-edit" class="ghost small" hidden>Cancel edit</button>
+      </header>
+      <form id="log-form" class="card">
+        <div class="field-row">
+          <label>Date <input type="date" name="performed_on" required></label>
+          <label class="grow">Notes <input type="text" name="notes" maxlength="500" placeholder="How did it feel?"></label>
+        </div>
+        <div class="sets">
+          <div class="sets-head" aria-hidden="true">
+            <span class="grow">Exercise</span><span class="num">kg</span><span class="num">Reps</span><span class="icon-col"></span>
           </div>
-          <form id="log-form">
-            <div class="row">
-              <label>Date <input type="date" name="performed_on" required></label>
-              <label class="grow">Notes <input type="text" name="notes" maxlength="500" placeholder="How did it feel?"></label>
-            </div>
-            <div class="sets">
-              <div class="sets-head" aria-hidden="true">
-                <span class="grow">Exercise</span><span class="num">kg</span><span class="num">Reps</span><span class="icon-col"></span>
-              </div>
-              <div id="set-rows"></div>
-              <button type="button" id="add-set" class="ghost add-set">+ Add set</button>
-            </div>
-            <button type="submit" id="save-workout" class="primary wide">Save workout</button>
-          </form>
-        </section>
+          <div id="set-rows"></div>
+          <button type="button" id="add-set" class="add-set">+ Add set</button>
+        </div>
+        <button type="submit" id="save-workout" class="primary wide">Save workout</button>
+      </form>
+    </section>
 
-        <section class="panel" aria-labelledby="next-heading">
-          <div class="panel-head">
-            <h2 id="next-heading">Next session</h2>
-            <select id="next-exercise" aria-label="Exercise for the next-session suggestion"></select>
-          </div>
-          <div id="next-card" class="coach" aria-live="polite"></div>
-        </section>
-      </div>
+    <!-- History ----------------------------------------------------------------------- -->
+    <section id="view-history" class="view" aria-labelledby="history-heading" hidden>
+      <header class="page-head"><h1 id="history-heading">History</h1></header>
+      <ul id="workout-list" class="workouts"></ul>
+    </section>
 
-      <div class="col">
-        <section class="panel" aria-labelledby="workouts-heading">
-          <div class="panel-head"><h2 id="workouts-heading">History</h2></div>
-          <ul id="workout-list" class="workouts"></ul>
-        </section>
+    <!-- Exercises --------------------------------------------------------------------- -->
+    <section id="view-exercises" class="view" aria-labelledby="exercises-heading" hidden>
+      <header class="page-head">
+        <h1 id="exercises-heading">Exercises</h1>
+        <button type="button" id="cancel-exercise-edit" class="ghost small" hidden>Cancel edit</button>
+      </header>
+      <ul id="exercise-list" class="exercises card"></ul>
+      <form id="exercise-form" class="card exercise-form">
+        <h2 id="exercise-form-heading">New exercise</h2>
+        <label>Name <input type="text" name="name" required maxlength="100" placeholder="e.g. Overhead press"></label>
+        <div class="field-row">
+          <label class="grow">Body
+            <select name="body_part">
+              <option value="upper">Upper body</option>
+              <option value="lower">Lower body</option>
+            </select>
+          </label>
+          <label class="num">Reps from <input type="number" name="rep_range_min" min="1" max="100" value="8" required></label>
+          <label class="num">to <input type="number" name="rep_range_max" min="1" max="100" value="12" required></label>
+        </div>
+        <button type="submit" id="save-exercise" class="primary wide">Add exercise</button>
+      </form>
+    </section>
+  </div>
 
-        <section class="panel" aria-labelledby="exercises-heading">
-          <div class="panel-head">
-            <h2 id="exercises-heading">Exercises</h2>
-            <button type="button" id="cancel-exercise-edit" class="ghost" hidden>Cancel edit</button>
-          </div>
-          <ul id="exercise-list" class="exercises"></ul>
-          <form id="exercise-form" class="exercise-form">
-            <label class="grow">Name <input type="text" name="name" required maxlength="100" placeholder="e.g. Overhead press"></label>
-            <label>Body
-              <select name="body_part">
-                <option value="upper">Upper</option>
-                <option value="lower">Lower</option>
-              </select>
-            </label>
-            <label class="num">Reps from <input type="number" name="rep_range_min" min="1" max="100" value="8" required></label>
-            <label class="num">to <input type="number" name="rep_range_max" min="1" max="100" value="12" required></label>
-            <button type="submit" id="save-exercise" class="primary">Add</button>
-          </form>
-        </section>
-      </div>
-    </div>
-  </main>
+  <nav class="tabbar" aria-label="Main">
+    <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
+    <a href="#log" data-view="log"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Log</a>
+    <a href="#history" data-view="history"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" /></svg>History</a>
+    <a href="#exercises" data-view="exercises"><svg viewBox="0 0 24 24"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" /></svg>Exercises</a>
+  </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
