@@ -55,7 +55,7 @@ service is down, and `502` if the answer does not match this shape.
   "weight_kg": 62.5,
   "target_reps": 8,
   "sets": 3,
-  "reason": "Every set at 60.0 kg reached 12 reps. Add weight and start again at 8 reps."
+  "reason": "Every set at 60 kg reached 12 reps. Add weight and start again at 8 reps."
 }
 ```
 

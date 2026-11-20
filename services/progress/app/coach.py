@@ -44,6 +44,11 @@ class Recommendation:
     reason: str
 
 
+def _kg(weight: Decimal) -> str:
+    """60.0 -> "60", 62.50 -> "62.5": weights read the way they are written on plates."""
+    return f"{weight.normalize():f}"
+
+
 def _round_down_to_plates(weight: Decimal) -> Decimal:
     return (weight / PLATE_STEP).to_integral_value(rounding=ROUND_FLOOR) * PLATE_STEP
 
@@ -66,6 +71,8 @@ def next_session(last_sets: list[PerformedSet], rep_min: int, rep_max: int, body
     weight = max(s.weight_kg for s in last_sets)
     working = [s.reps for s in last_sets if s.weight_kg == weight]
     sets = len(working)
+    # the wording follows the count: "your set" for one, "every set" for several
+    one = sets == 1
 
     if min(working) >= rep_max:
         new_weight = weight + INCREMENT[body_part]
@@ -74,7 +81,8 @@ def next_session(last_sets: list[PerformedSet], rep_min: int, rep_max: int, body
             new_weight,
             rep_min,
             sets,
-            f"Every set at {weight} kg reached {rep_max} reps. Add weight and start again at {rep_min} reps.",
+            f"{'Your set' if one else 'Every set'} at {_kg(weight)} kg reached {rep_max} reps. "
+            f"Add weight and start again at {rep_min} reps.",
         )
 
     if max(working) < rep_min:
@@ -85,7 +93,8 @@ def next_session(last_sets: list[PerformedSet], rep_min: int, rep_max: int, body
             new_weight,
             rep_min,
             sets,
-            f"No set at {weight} kg reached {rep_min} reps. Drop about 10% and build back up.",
+            f"{'Your set' if one else 'No set'} at {_kg(weight)} kg {'fell short of' if one else 'reached'} "
+            f"{rep_min} reps. Drop about 10% and build back up.",
         )
 
     target = min(min(working) + 1, rep_max)
@@ -94,5 +103,5 @@ def next_session(last_sets: list[PerformedSet], rep_min: int, rep_max: int, body
         weight,
         target,
         sets,
-        f"Stay at {weight} kg and aim for {target} reps on every set.",
+        f"Stay at {_kg(weight)} kg and aim for {target} reps{'' if one else ' on every set'}.",
     )
