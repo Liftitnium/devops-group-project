@@ -86,8 +86,21 @@ rotate it first, then remove it, then tell the professor (Assignment 2 §5).
 
 ## Monitoring
 
-Queries for the dashboard (request count, error rate, response time) and the SLO are in
-[monitoring/queries.kql](monitoring/queries.kql).
+Each service logs one JSON line per request (method, path, status, duration; INFO level,
+no request bodies) to stdout, which Container Apps sends to the Log Analytics workspace
+`<prefix>-logs`. The queries in [monitoring/queries.kql](monitoring/queries.kql) are
+deployed by Bicep as saved queries: in the Azure portal open the workspace, then
+**Logs > Queries > LiftLog**.
+
+- **Dashboard:** *1. Request count*, *2. Error rate (5xx)* and *3. Response time
+  p50/p95/p99*, per service, as time charts. *6. Slowest endpoints* and *7. Recent
+  errors* help when one of them looks wrong.
+- **SLO:** **99% of GET requests to the workouts API are answered without a server error
+  in under 500 ms, measured over a rolling 7 days.** *4. SLO* gives the SLI, whether the
+  target is met and how much error budget is left; *5. SLO daily* shows the SLI per day.
+  Cold starts (a Container App scaling up from zero, a database waking from auto-pause)
+  count against the budget on purpose, because users feel them; they are the main way
+  this SLO is missed on a demo with little traffic.
 
 ## Team
 
