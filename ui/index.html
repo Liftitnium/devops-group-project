@@ -4,9 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>LiftLog</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="logo-512.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#e85a1c">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Martian+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -14,74 +18,86 @@
     <!-- Home -------------------------------------------------------------------------- -->
     <section id="view-home" class="view" aria-labelledby="greeting">
       <header class="greet">
-        <div class="avatar" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" /></svg>
-        </div>
+        <img class="logo" src="logo-512.png" alt="LiftLog" width="52" height="52">
         <div class="grow">
           <h1 id="greeting">Hello</h1>
           <p class="muted">Ready to beat last time?</p>
         </div>
         <ul id="status" class="status" aria-live="polite" aria-label="Service status">
-          <li data-service="workouts" title="Workouts service"><span class="dot"></span>Workouts <span class="state">checking</span></li>
-          <li data-service="progress" title="Progress service"><span class="dot"></span>Progress <span class="state">checking</span></li>
+          <li data-service="workouts"><span class="dot" aria-hidden="true"></span>Workouts <span class="state">checking</span></li>
+          <li data-service="progress"><span class="dot" aria-hidden="true"></span>Progress <span class="state">checking</span></li>
         </ul>
       </header>
 
       <p id="outage" class="outage" role="alert" hidden></p>
 
-      <div class="section-head"><h2>This week</h2></div>
-      <div class="stat-cards" id="stat-cards"></div>
+      <div class="home-grid">
+        <div class="home-main">
+          <section aria-labelledby="week-heading">
+            <div class="section-head"><h2 id="week-heading">This week</h2></div>
+            <div class="stat-cards" id="stat-cards"></div>
+          </section>
 
-      <div class="section-head"><h2>Next session</h2></div>
-      <article id="coach" class="coach" aria-live="polite">
-        <div class="chips" id="coach-chips" role="tablist" aria-label="Exercise"></div>
-        <div id="coach-body"></div>
-      </article>
+          <section aria-labelledby="recent-heading">
+            <div class="section-head">
+              <h2 id="recent-heading">Recent</h2>
+              <a href="#history" class="see-all">See all</a>
+            </div>
+            <ul id="recent-list" class="recent"></ul>
+          </section>
+        </div>
 
-      <div class="section-head">
-        <h2>Recent</h2>
-        <a href="#history" class="see-all">See all</a>
+        <section class="home-side" aria-labelledby="coach-heading">
+          <div class="section-head"><h2 id="coach-heading">Next session</h2></div>
+          <article id="coach" class="coach">
+            <div class="chips" id="coach-chips" role="tablist" aria-label="Choose an exercise"></div>
+            <div id="coach-body" role="tabpanel" aria-live="polite"></div>
+          </article>
+        </section>
       </div>
-      <ul id="recent-list" class="recent"></ul>
     </section>
 
     <!-- Log --------------------------------------------------------------------------- -->
-    <section id="view-log" class="view" aria-labelledby="log-heading" hidden>
+    <section id="view-log" class="view narrow" aria-labelledby="log-heading" hidden>
       <header class="page-head">
         <h1 id="log-heading">Log a workout</h1>
         <button type="button" id="cancel-workout-edit" class="ghost small" hidden>Cancel edit</button>
       </header>
-      <p id="log-hint" class="hint" hidden>Add an exercise first, then log sets against it. <a href="#exercises">Go to Exercises →</a></p>
-      <form id="log-form" class="card">
+      <p id="log-hint" class="hint" hidden>Add an exercise first, then log sets against it. <a href="#exercises">Go to Exercises</a></p>
+      <p id="log-error" class="hint" role="alert" hidden></p>
+      <form id="log-form" class="card" autocomplete="off">
         <div class="field-row">
-          <label>Date <input type="date" name="performed_on" required></label>
+          <label class="date-field">Date
+            <input type="date" name="performed_on" required aria-describedby="date-readout">
+            <span id="date-readout" class="field-help"></span>
+          </label>
           <label class="grow">Notes <input type="text" name="notes" maxlength="500" placeholder="How did it feel?"></label>
         </div>
         <div class="sets">
           <div class="sets-head" aria-hidden="true">
-            <span class="grow">Exercise</span><span class="num">kg</span><span class="num">Reps</span><span class="icon-col"></span>
+            <span class="set-no">Set</span><span class="grow">Exercise</span><span class="num">kg</span><span class="num">Reps</span><span class="icon-col"></span>
           </div>
           <div id="set-rows"></div>
-          <button type="button" id="add-set" class="add-set">+ Add set</button>
+          <button type="button" id="add-set" class="add-set">Add set</button>
         </div>
         <button type="submit" id="save-workout" class="primary wide">Save workout</button>
       </form>
     </section>
 
     <!-- History ----------------------------------------------------------------------- -->
-    <section id="view-history" class="view" aria-labelledby="history-heading" hidden>
+    <section id="view-history" class="view narrow" aria-labelledby="history-heading" hidden>
       <header class="page-head"><h1 id="history-heading">History</h1></header>
       <ul id="workout-list" class="workouts"></ul>
     </section>
 
     <!-- Exercises --------------------------------------------------------------------- -->
-    <section id="view-exercises" class="view" aria-labelledby="exercises-heading" hidden>
+    <section id="view-exercises" class="view narrow" aria-labelledby="exercises-heading" hidden>
       <header class="page-head">
         <h1 id="exercises-heading">Exercises</h1>
         <button type="button" id="cancel-exercise-edit" class="ghost small" hidden>Cancel edit</button>
       </header>
       <ul id="exercise-list" class="exercises card"></ul>
-      <form id="exercise-form" class="card exercise-form">
+      <form id="exercise-form" class="card exercise-form" autocomplete="off">
         <h2 id="exercise-form-heading">New exercise</h2>
         <label>Name <input type="text" name="name" required maxlength="100" placeholder="e.g. Overhead press"></label>
         <div class="field-row">
@@ -100,20 +116,21 @@
   </div>
 
   <nav class="tabbar" aria-label="Main">
-    <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
-    <a href="#log" data-view="log"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Log</a>
-    <a href="#history" data-view="history"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" /></svg>History</a>
-    <a href="#exercises" data-view="exercises"><svg viewBox="0 0 24 24"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" /></svg>Exercises</a>
+    <a href="#home" data-view="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</a>
+    <a href="#log" data-view="log"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Log</a>
+    <a href="#history" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg>History</a>
+    <a href="#exercises" data-view="exercises"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" /></svg>Exercises</a>
   </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <template id="set-row">
     <div class="set-row">
+      <span class="set-no" aria-hidden="true"></span>
       <select name="exercise_id" class="grow" aria-label="Exercise" required></select>
-      <input type="number" name="weight_kg" class="num" aria-label="Weight in kg" min="0" max="1000" step="0.5" required>
-      <input type="number" name="reps" class="num" aria-label="Reps" min="1" max="100" required>
-      <button type="button" class="icon remove-set" aria-label="Remove set">✕</button>
+      <input type="number" name="weight_kg" class="num" aria-label="Weight in kg" placeholder="kg" min="0" max="1000" step="0.5" inputmode="decimal" required>
+      <input type="number" name="reps" class="num" aria-label="Reps" placeholder="reps" min="1" max="100" inputmode="numeric" required>
+      <button type="button" class="icon remove-set" aria-label="Remove set"></button>
     </div>
   </template>
 

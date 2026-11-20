@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -19,6 +20,7 @@ from app.config import SERVICE_NAME, Settings, load_settings
 from app.db import check_health, connect, migrate
 from app.errors import DomainError
 from app.gateway import HttpWorkoutsGateway
+from app.goals_api import router as goals_router
 
 log = logging.getLogger(SERVICE_NAME)
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
@@ -76,6 +78,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def handle_domain_error(request: Request, exc: DomainError):
         return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
 
+    @app.exception_handler(RequestValidationError)
+    async def handle_validation_error(request: Request, exc: RequestValidationError):
+        # one readable sentence the UI can show, e.g. "target_reps: Input should be ..."
+        messages = []
+        for err in exc.errors():
+            field = ".".join(str(p) for p in err["loc"] if p != "body")
+            msg = err["msg"].removeprefix("Value error, ")
+            messages.append(f"{field}: {msg}" if field else msg)
+        return JSONResponse(status_code=422, content={"detail": "; ".join(messages)})
+
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception):
         # the stack trace goes to the log, never to the client
@@ -99,4 +111,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "db": "ok", "version": settings.version}
 
     app.include_router(coach_router)
+    app.include_router(goals_router)
     return app

@@ -66,3 +66,40 @@ has a `detail` the UI can show as-is.
 `action` is one of `increase_weight`, `add_reps`, `deload`, `no_history`. With
 `no_history`, `based_on`, `weight_kg`, `target_reps` and `sets` are `null` and `reason`
 says what to do instead. Show `reason` to the user as-is.
+
+## UI → progress: goals (#21)
+
+`POST /goals`, `GET /goals[?exercise_id=N]`, `GET /goals/{id}`, `PUT /goals/{id}`,
+`DELETE /goals/{id}` (`204`). Request body for `POST` and `PUT`:
+
+```json
+{"exercise_id": 3, "target_weight_kg": 62.5, "target_reps": 8, "target_date": "2026-12-19"}
+```
+
+Responses are the same object plus `id`. `GET /goals` is ordered by `target_date`.
+
+- `422` with a readable `detail` for bad fields (`target_weight_kg` > 0, at most 2 decimals and
+  ≤ 1000; `target_reps` 1–100), for a new goal with a past `target_date`, and for an
+  `exercise_id` the workouts service does not know.
+- `404` `{"detail": "Goal 9 not found."}`.
+- `POST`, and `PUT` when it changes `exercise_id`, ask workouts whether the exercise exists, so
+  they are `503` while workouts is down. List, read, other updates and delete only use the
+  progress database and keep working.
+
+`GET /goals/{id}/progress`: how close the goal is, from the full workouts history. The best
+attempt is the heaviest set done for at least `target_reps` reps.
+
+```json
+{
+  "goal": {"id": 1, "exercise_id": 3, "target_weight_kg": 60.0, "target_reps": 8, "target_date": "2026-12-19"},
+  "exercise_name": "Bench press",
+  "best_weight_kg": 57.5,
+  "best_on": "2026-11-17",
+  "percent": 96,
+  "achieved": false,
+  "days_left": 30
+}
+```
+
+`best_weight_kg` and `best_on` are `null` with no qualifying set (`percent` 0). `percent` is
+capped at 100; `days_left` is negative once the date has passed. `503` while workouts is down.
