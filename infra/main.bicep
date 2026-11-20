@@ -53,6 +53,22 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
+// Dashboard and SLO queries (#18, #19): one saved query per section of
+// monitoring/queries.kql, shown in the workspace under Logs > Queries > LiftLog. A section
+// starts with "// ---------- N. Title ----------"; the title becomes the query's name.
+var kqlSections = skip(split(loadTextContent('../monitoring/queries.kql'), '// ---------- '), 1)
+
+resource savedQueries 'Microsoft.OperationalInsights/workspaces/savedSearches@2020-08-01' = [for (section, i) in kqlSections: {
+  parent: logs
+  name: 'liftlog-${i + 1}'
+  properties: {
+    category: 'LiftLog'
+    displayName: trim(replace(substring(section, 0, indexOf(section, '\n')), '----------', ''))
+    query: trim(substring(section, indexOf(section, '\n') + 1))
+    version: 2
+  }
+}]
+
 resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${prefix}-env'
   location: location
