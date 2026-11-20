@@ -1,7 +1,8 @@
 # Data model
 
 **Must match the migrations** in `services/*/migrations/`. Each owner updates their half
-in the same PR as the migration. workouts: `001_init.sql`. progress: planned.
+in the same PR as the migration. workouts: `001_init.sql`. progress: `001_goals.sql`
+(personal records: planned, `002`).
 
 ## workouts database
 
@@ -59,3 +60,10 @@ erDiagram
         date achieved_on
     }
 ```
+
+`goals` (`001_goals.sql`): `target_weight_kg > 0` (`DECIMAL(6,2)`), `target_reps >= 1`, indexed
+on `exercise_id`, plus `created_at` (UTC). A goal means "lift `target_weight_kg` for at least
+`target_reps` reps by `target_date`". How close a goal is, is not stored: it is computed from the
+workouts history on every request (`GET /goals/{id}/progress`).
+
+`personal_records` is not created yet (#20, `002`).
