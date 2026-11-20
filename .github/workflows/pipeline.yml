@@ -200,6 +200,10 @@ jobs:
             exit 1
           done
 
+      # create, read and delete real data on the live API, through both services (#23)
+      - name: API smoke test
+        run: scripts/smoke_test.sh
+
       - name: UI smoke test
         run: curl -sSf --max-time 20 "$UI_URL" | grep -q "LiftLog"
 
