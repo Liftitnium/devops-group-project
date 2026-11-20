@@ -538,6 +538,9 @@ document.getElementById("cancel-exercise-edit").addEventListener("click", resetE
 function renderLogState() {
   const noExercises = !state.loading && !state.loadError && state.exercises.length === 0;
   document.getElementById("log-hint").hidden = !noExercises;
+  const logError = document.getElementById("log-error");
+  logError.hidden = !state.loadError;
+  logError.textContent = state.loadError ? `${state.loadError} You can log again once it's back.` : "";
   const save = document.getElementById("save-workout");
   if (save.classList.contains("busy")) return;
   save.disabled = state.loading || noExercises || Boolean(state.loadError);
