@@ -75,8 +75,14 @@ Coverage must stay at or above 70% (set in each `pyproject.toml`; CI fails below
 Everything is in `infra/main.bicep`. One member, logged in with `az login`:
 
 ```bash
-CLASS=<class> SQL_ADMIN_PASSWORD='<strong password>' IMAGE_TAG=<sha on GHCR> infra/setup.sh
+CLASS=<class> SQL_ADMIN_PASSWORD='<strong password>' \
+  WORKOUTS_DB_PASSWORD='<strong password>' PROGRESS_DB_PASSWORD='<strong password>' \
+  IMAGE_TAG=<sha on GHCR> infra/setup.sh
 ```
+
+The script deploys the Bicep and creates one database user per service
+(`infra/sql/app-user.sql`); the services never connect as the SQL admin. It needs `sqlcmd`
+or Docker, and briefly allows your own IP on the SQL firewall (removed when it ends).
 
 Then in GitHub > Settings > Secrets and variables > Actions set variables
 `AZURE_RESOURCE_GROUP`, `AZURE_PREFIX` and the secret `AZURE_CREDENTIALS` (the group's
@@ -86,7 +92,16 @@ service principal). The deploy job is skipped until `AZURE_PREFIX` exists.
 
 None in the repository. Locally they live in `.env` (gitignored); in Azure they are
 Container App secrets set by Bicep; in CI they are GitHub secrets. If one leaks: revoke or
-rotate it first, then remove it, then tell the professor (Assignment 2 §5).
+rotate it first, then remove it, then tell the professor (Assignment 2 §5). A database
+password is rotated by running `infra/setup.sh` again with a new value.
+
+## Security model
+
+- Each service has its own database user, in both compose and Azure, and cannot open the
+  other service's database ([ADR-7](docs/decisions.md#adr-7-database-access-in-azure)).
+- The APIs have **no sign-in, by design**: LiftLog is a single-user demo with test data.
+  CORS stops other websites from calling them, but anyone with a service URL can use the
+  API directly ([ADR-8](docs/decisions.md#adr-8-no-user-accounts-in-the-api)).
 
 ## Monitoring
 

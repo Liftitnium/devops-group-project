@@ -13,10 +13,25 @@ param location string = resourceGroup().location
 @description('Static Web Apps exist in a few regions only')
 param uiLocation string = 'westeurope'
 
+@description('false only in a subscription whose region policy blocks Static Web Apps')
+param deployUi bool = true
+
+@description('Extra browser origins for CORS, comma-separated (e.g. http://localhost:8080 for testing)')
+param extraOrigins string = ''
+
 param sqlAdminLogin string = 'liftlog_admin'
 
+@description('Used only by infra/setup.sh to create the service users; no app connects as admin')
 @secure()
 param sqlAdminPassword string
+
+@description('Password of workouts_app, a contained user in the workouts database only')
+@secure()
+param workoutsDbPassword string
+
+@description('Password of progress_app, a contained user in the progress database only')
+@secure()
+param progressDbPassword string
 
 @description('Full image references, e.g. ghcr.io/liftitnium/liftlog-workouts:<sha>')
 param workoutsImage string
@@ -80,7 +95,9 @@ resource sql 'Microsoft.Sql/servers@2023-08-01-preview' = {
 }
 
 // 0.0.0.0 - 0.0.0.0 is Azure's "allow Azure services" rule: Container Apps can connect,
-// the internet cannot. CI never connects (it uses its own SQL Server container).
+// the internet cannot. It also admits resources of other Azure customers, which still need
+// a password; accepted for this project in docs/decisions.md, ADR-7. CI never connects
+// (it uses its own SQL Server container); setup.sh opens its own IP only while it runs.
 resource allowAzure 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
   parent: sql
   name: 'AllowAzureServices'
@@ -104,15 +121,17 @@ resource dbs 'Microsoft.Sql/servers/databases@2023-08-01-preview' = [for svc in 
   }
 }]
 
-resource ui 'Microsoft.Web/staticSites@2023-12-01' = {
+resource ui 'Microsoft.Web/staticSites@2023-12-01' = if (deployUi) {
   name: '${prefix}-ui'
   location: uiLocation
   sku: { name: 'Free', tier: 'Free' }
   properties: {}
 }
 
-var uiOrigin = 'https://${ui.properties.defaultHostname}'
+var uiOrigin = deployUi ? 'https://${ui!.properties.defaultHostname}' : ''
+var allowedOrigins = join(filter(concat([uiOrigin], split(extraOrigins, ',')), o => !empty(trim(o))), ',')
 
+// each service connects as its own contained user (created by setup.sh), never as admin
 func dbUrl(login string, password string, host string, db string) string =>
   'mssql://${login}:${uriComponent(password)}@${host}:1433/${db}'
 
@@ -124,9 +143,9 @@ module workouts 'containerapp.bicep' = {
     location: location
     environmentId: env.id
     image: workoutsImage
-    databaseUrl: dbUrl(sqlAdminLogin, sqlAdminPassword, sql.properties.fullyQualifiedDomainName, '${prefix}-workouts-db')
+    databaseUrl: dbUrl('workouts_app', workoutsDbPassword, sql.properties.fullyQualifiedDomainName, '${prefix}-workouts-db')
     envVars: [
-      { name: 'ALLOWED_ORIGINS', value: uiOrigin }
+      { name: 'ALLOWED_ORIGINS', value: allowedOrigins }
     ]
     ghcrUsername: ghcrUsername
     ghcrToken: ghcrToken
@@ -141,9 +160,9 @@ module progress 'containerapp.bicep' = {
     location: location
     environmentId: env.id
     image: progressImage
-    databaseUrl: dbUrl(sqlAdminLogin, sqlAdminPassword, sql.properties.fullyQualifiedDomainName, '${prefix}-progress-db')
+    databaseUrl: dbUrl('progress_app', progressDbPassword, sql.properties.fullyQualifiedDomainName, '${prefix}-progress-db')
     envVars: [
-      { name: 'ALLOWED_ORIGINS', value: uiOrigin }
+      { name: 'ALLOWED_ORIGINS', value: allowedOrigins }
       { name: 'WORKOUTS_URL', value: 'https://${workouts.outputs.fqdn}' }
       { name: 'WORKOUTS_TIMEOUT_S', value: '3' }
     ]

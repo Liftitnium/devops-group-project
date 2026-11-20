@@ -135,14 +135,28 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_PREFIX != ''
     runs-on: ubuntu-24.04
     environment: production
+    permissions:
+      contents: read
+      id-token: write # OIDC login, no stored Azure secret
     env:
       RG: ${{ vars.AZURE_RESOURCE_GROUP }}
       PREFIX: ${{ vars.AZURE_PREFIX }}
       SHA: ${{ github.sha }}
+      # "false" only where the subscription cannot host a Static Web App (personal fallback)
+      DEPLOY_UI: ${{ vars.AZURE_DEPLOY_UI != 'false' }}
     steps:
       - uses: actions/checkout@v4
       - run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
-      - uses: azure/login@v2
+      # OIDC with a managed identity when AZURE_CLIENT_ID is set (federated credential for
+      # the production environment), otherwise the service principal JSON secret
+      - if: vars.AZURE_CLIENT_ID != ''
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - if: vars.AZURE_CLIENT_ID == ''
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -160,6 +174,7 @@ jobs:
             fqdn=$(az containerapp show -g "$RG" -n "${PREFIX}-${svc}" --query properties.configuration.ingress.fqdn -o tsv)
             echo "${svc^^}_URL=https://${fqdn}" >> "$GITHUB_ENV"
           done
+          [ "$DEPLOY_UI" = "true" ] || exit 0
           echo "UI_URL=https://$(az staticwebapp show -g "$RG" -n "${PREFIX}-ui" --query defaultHostname -o tsv)" >> "$GITHUB_ENV"
           token=$(az staticwebapp secrets list -g "$RG" -n "${PREFIX}-ui" --query properties.apiKey -o tsv)
           echo "::add-mask::$token"
@@ -167,6 +182,7 @@ jobs:
 
       # same code as local; only the service URLs differ
       - name: Point the UI at Azure
+        if: env.DEPLOY_UI == 'true'
         run: |
           cat > ui/config.js <<EOF
           window.LIFTLOG_CONFIG = {
@@ -176,6 +192,7 @@ jobs:
           EOF
 
       - uses: Azure/static-web-apps-deploy@v1
+        if: env.DEPLOY_UI == 'true'
         with:
           azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
           action: upload
@@ -205,13 +222,14 @@ jobs:
         run: scripts/smoke_test.sh
 
       - name: UI smoke test
+        if: env.DEPLOY_UI == 'true'
         run: curl -sSf --max-time 20 "$UI_URL" | grep -q "LiftLog"
 
       - name: Summary
         run: |
           {
             echo "### Deployed ${SHA}"
-            echo "- UI: ${UI_URL}"
+            echo "- UI: ${UI_URL:-not deployed in this subscription}"
             echo "- workouts: ${WORKOUTS_URL}/health"
             echo "- progress: ${PROGRESS_URL}/health"
           } >> "$GITHUB_STEP_SUMMARY"
