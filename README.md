@@ -64,7 +64,11 @@ Coverage must stay at or above 70% (set in each `pyproject.toml`; CI fails below
   SQL Server, `pip-audit`, a gitleaks scan of the whole history, and an image build.
 - **Merge to main:** the same, then images pushed to GHCR tagged with the commit SHA,
   both Container Apps updated, the UI deployed to Static Web Apps, and `/health` polled
-  until it reports the new SHA (fails the run after 5 minutes).
+  until it reports the new SHA (fails the run after 5 minutes). Then
+  `scripts/smoke_test.sh` creates an exercise and a workout on the live API, asks progress
+  for the next session (so the call between the services is tested too), and deletes
+  them again; any wrong answer fails the run. It also runs against `docker compose`:
+  `WORKOUTS_URL=http://localhost:8001 PROGRESS_URL=http://localhost:8002 scripts/smoke_test.sh`.
 
 ## Reproduce the Azure setup
 
