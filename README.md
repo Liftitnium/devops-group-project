@@ -4,7 +4,31 @@ Log your lifts and get told what to lift next time. LiftLog stores your workouts
 (exercises, sets, weight, reps), detects personal records automatically, tracks goals,
 and recommends the next session's weight with a progressive-overload rule.
 
-**Live:** _UI URL goes here after the first deploy_ · **Status:** Sprint 1, skeleton
+**Live:** _UI URL goes here after the first deploy_ · **Status:** Sprint 2 (19–24 Nov 2026)
+
+![LiftLog home page: this week's sets and volume, the next-session coach and recent workouts](docs/images/home.png)
+
+## Using LiftLog
+
+The UI works on a phone (tab bar at the bottom) and on a desktop (two columns from 960px).
+
+- **Exercises:** add the lifts you do, each with a body part (upper or lower) and a rep
+  range, e.g. Bench press, upper body, 8–12 reps. You can edit them, and delete them while
+  no workout uses them.
+- **Log:** pick a date, add sets (exercise, kg, reps) and save. Saved workouts can be
+  edited or deleted from History.
+- **Home:** sets and volume for the last 7 days, your recent workouts, and the
+  **next-session coach**: for each exercise it looks at your last session and tells you
+  what to lift next time. If every set reached the top of the rep range it adds weight
+  (+2.5 kg upper body, +5 kg lower body), if every set missed the bottom it drops about
+  10%, otherwise it asks for one more rep. *Log this session* fills the Log form with
+  that suggestion.
+- **History:** every workout, newest first; open one to see its sets.
+- **When a service is down:** the app says so in plain words and keeps working where it
+  can, e.g. with the workouts service stopped you get a banner and a "Try again" button
+  instead of a broken page.
+- **Goals and personal records:** the goals API is done (#21); personal records (#20) and
+  their screens (#22) are in progress this sprint.
 
 ## Architecture
 
@@ -123,10 +147,14 @@ deployed by Bicep as saved queries: in the Azure portal open the workspace, then
 
 ## Team
 
-| Name | GitHub | Owns |
-|---|---|---|
-| _name_ | @_username_ | platform (CI/CD, Azure, monitoring) + progress service |
-| _name_ | @_username_ | workouts service |
-| _name_ | @_username_ | UI |
+Class 3B, group 6.
 
-Scrum roles per sprint: [docs/scrum/](docs/scrum/).
+| Name | GitHub | Built | Scrum roles |
+|---|---|---|---|
+| Raji | [@Liftitnium](https://github.com/Liftitnium) | Platform: CI/CD pipeline, Azure (Bicep), monitoring, smoke test. Workouts API (#9–#11) and the next-session coach (#12) | Scrum Master in Sprint 1, Product Owner in Sprint 2 |
+| Emma | [@emmlje18](https://github.com/emmlje18) | UI (#13–#17, #22), README, Scrum records | Product Owner in Sprint 1, Scrum Master in Sprint 2 |
+| David | [@DavidDumit](https://github.com/DavidDumit) | Goals (#21) and personal records (#20) in the progress service | Developer |
+| Lorenzo | [@Hoffalo](https://github.com/Hoffalo) | Data model documentation (#24) | Developer |
+
+Sprint records (planning, review, retrospective): [docs/scrum/](docs/scrum/). How we used
+AI tools: [AI_USAGE.md](AI_USAGE.md).
