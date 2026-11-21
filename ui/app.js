@@ -1,5 +1,6 @@
 // LiftLog UI. Reads and writes through window.api (api.js): exercises (#15), logging and
-// editing workouts (#13), history (#14) and the next-session coach (#16).
+// editing workouts (#13), history (#14), the next-session coach (#16), and goals and
+// personal records on the Progress tab (#22).
 // Text from the services is always set with textContent, never innerHTML, so a workout
 // note can't inject HTML into the page.
 
@@ -16,10 +17,17 @@ const state = {
   loading: true, // true until the exercise and workout lists have arrived
   detailsLoading: false, // true while this fortnight's sets are being fetched
   loadError: null,
+  goals: [], // GET /goals, ordered by target date
+  goalsLoading: true,
+  goalsError: null,
+  goalProgress: new Map(), // goal id -> GET /goals/{id}/progress, { loading } or { error }
+  records: new Map(), // exercise id -> GET /exercises/{id}/records, { loading } or { error }
 };
 let editingWorkoutId = null;
 let editingExerciseId = null;
 let coachExerciseId = null;
+let editingGoalId = null;
+let recordsExerciseId = null;
 const serviceDown = { workouts: false, progress: false };
 
 // --- helpers -------------------------------------------------------------------------------
@@ -75,7 +83,7 @@ function toast(text, kind = "ok") {
 }
 function hideToast() { document.getElementById("toast").hidden = true; }
 // an error is about what the user typed; once they change it, the message is stale
-for (const id of ["log-form", "exercise-form"]) {
+for (const id of ["log-form", "exercise-form", "goal-form"]) {
   document.getElementById(id).addEventListener("input", () => {
     if (document.getElementById("toast").classList.contains("error")) hideToast();
   });
@@ -159,13 +167,17 @@ async function loadAll() {
     state.workouts = workouts;
     state.details.clear();
     state.coach.clear();
+    state.records.clear(); // a saved workout can set a new PR
     state.loadError = null;
+    rememberNames();
   } catch (error) {
     state.loadError = error.message;
   }
   state.loading = false;
   state.detailsLoading = !state.loadError;
   renderAll();
+  // goals live in the progress database, so they load even while workouts is down
+  loadGoals();
   if (state.loadError) return;
 
   for (const ex of state.exercises) loadCoach(ex.id);
@@ -187,11 +199,14 @@ function renderAll() {
   renderWorkouts();
   renderHome();
   renderLogState();
+  renderGoals();
+  renderGoalFormState();
+  renderRecords();
 }
 
-// --- navigation (one page, four views, the URL hash says which) -----------------------------
+// --- navigation (one page, five views, the URL hash says which) -----------------------------
 
-const VIEWS = ["home", "log", "history", "exercises"];
+const VIEWS = ["home", "log", "history", "progress", "exercises"];
 
 function showView(name) {
   if (!VIEWS.includes(name)) name = "home";
@@ -202,6 +217,7 @@ function showView(name) {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
+  if (name === "progress") renderRecords(); // records are fetched when the tab is opened
   window.scrollTo(0, 0);
 }
 
@@ -235,7 +251,7 @@ function renderOutage() {
   const banner = document.getElementById("outage");
   const messages = [];
   if (serviceDown.workouts) messages.push("Workouts is unavailable, so logging and history are paused.");
-  if (serviceDown.progress) messages.push("Progress is unavailable, so next-session suggestions are paused.");
+  if (serviceDown.progress) messages.push("Progress is unavailable, so suggestions, goals and records are paused.");
   banner.hidden = messages.length === 0;
   if (messages.length) put(banner, icon("alert"), el("span", {}, `${messages.join(" ")} Everything else still works.`));
 }
@@ -718,10 +734,233 @@ function renderWorkouts() {
   }));
 }
 
+// --- progress: goals (#21) and personal records (#20) --------------------------------------
+// The goal list comes from the progress database only, so it still shows while workouts is
+// down; how close each goal is needs the workouts history and says so when it can't load.
+
+const daysUntil = (iso) => Math.round((toDate(iso) - toDate(isoDay(new Date()))) / 86400000);
+// Exercise names come from workouts. The last names seen are kept in this browser, so
+// goals still read "Bench press" rather than "Exercise 3" while workouts is down.
+const NAMES_KEY = "liftlog.exerciseNames";
+function rememberNames() {
+  try {
+    localStorage.setItem(NAMES_KEY, JSON.stringify(Object.fromEntries(state.exercises.map((ex) => [ex.id, ex.name]))));
+  } catch {
+    // storage blocked (private window): names just aren't remembered
+  }
+}
+function rememberedName(id) {
+  try {
+    return JSON.parse(localStorage.getItem(NAMES_KEY) ?? "{}")[id] ?? null;
+  } catch {
+    return null;
+  }
+}
+const goalName = (g) => exerciseById(g.exercise_id)?.name ?? state.goalProgress.get(g.id)?.exercise_name
+  ?? rememberedName(g.exercise_id) ?? `Exercise ${g.exercise_id}`;
+
+async function loadGoals() {
+  try {
+    state.goals = await api.listGoals();
+    state.goalsError = null;
+  } catch (error) {
+    state.goalsError = error.message;
+  }
+  state.goalsLoading = false;
+  state.goalProgress.clear();
+  for (const g of state.goals) state.goalProgress.set(g.id, { loading: true });
+  renderGoals();
+  await Promise.all(state.goals.map(async (g) => {
+    try {
+      state.goalProgress.set(g.id, await api.goalProgress(g.id));
+    } catch (error) {
+      state.goalProgress.set(g.id, { error: error.message });
+    }
+  }));
+  renderGoals();
+}
+
+function retryGoals() {
+  state.goalsLoading = true;
+  renderGoals();
+  loadGoals();
+}
+
+function goalStatus(g, progress) {
+  if (progress?.achieved) return { kind: "done", text: "Achieved" };
+  const days = daysUntil(g.target_date);
+  if (days < 0) return { kind: "late", text: `${plural(-days, "day")} overdue` };
+  if (days === 0) return { kind: "soon", text: "Due today" };
+  return { kind: days <= 7 ? "soon" : "", text: `${plural(days, "day")} left` };
+}
+
+function goalCard(g) {
+  const p = state.goalProgress.get(g.id);
+  const ready = p && !p.loading && !p.error;
+  const status = goalStatus(g, ready ? p : null);
+  const percent = ready ? p.percent : 0;
+  const name = goalName(g);
+  let detail;
+  if (!p || p.loading) detail = "Checking your history...";
+  else if (p.error) detail = p.error;
+  else if (p.best_weight_kg === null) detail = `No set of ${g.target_reps}+ reps logged yet.`;
+  else detail = [`Best ${g.target_reps}+ rep set: `, el("strong", { class: "mono" }, `${kg(p.best_weight_kg)} kg`), ` on ${formatDate(p.best_on)}`];
+  return el("li", { class: `card goal${g.id === editingGoalId ? " editing" : ""}${ready && p.achieved ? " achieved" : ""}` },
+    el("div", { class: "goal-top" },
+      el("strong", { class: "grow" }, name),
+      el("span", { class: `goal-status ${status.kind}` }, status.kind === "done" ? icon("check") : null, status.text)),
+    el("p", { class: "goal-target" },
+      el("span", { class: "mono" }, `${kg(g.target_weight_kg)} kg × ${g.target_reps}`), ` by ${formatDate(g.target_date)}`),
+    el("div", { class: "goal-bar", role: "progressbar", "aria-label": `${name} goal`, "aria-valuemin": "0",
+      "aria-valuemax": "100", "aria-valuenow": String(percent) }, el("i", { style: `width:${percent}%` })),
+    el("div", { class: "goal-foot" },
+      el("p", { class: "goal-detail" }, ...[detail].flat()),
+      ready ? el("span", { class: "goal-percent" }, `${percent}%`) : null),
+    el("div", { class: "actions" },
+      el("button", { type: "button", class: "ghost small", onclick: () => editGoal(g.id) }, "Edit"),
+      confirmButton("Delete", "Confirm delete", (button) => deleteGoal(g.id, button))));
+}
+
+function renderGoals() {
+  const list = document.getElementById("goal-list");
+  if (state.goalsLoading) return put(list, ...loadingRows(2));
+  if (state.goalsError) return put(list, statusItem(state.goalsError, retryGoals));
+  if (state.goals.length === 0) return put(list, statusItem("No goals yet. Set one below, e.g. Bench press 60 kg × 8 by the end of the month."));
+  put(list, ...state.goals.map(goalCard));
+}
+
+// a goal is set against an exercise, so the form needs the exercise list from workouts
+function renderGoalFormState() {
+  const save = document.getElementById("save-goal");
+  if (save.classList.contains("busy")) return;
+  save.disabled = state.loading || state.exercises.length === 0;
+  save.textContent = state.loading ? "Loading exercises..."
+    : state.exercises.length === 0 ? (state.loadError ? "Exercises unavailable" : "Add an exercise first")
+    : editingGoalId ? "Save changes" : "Add goal";
+}
+
+function editGoal(id) {
+  const g = state.goals.find((goal) => goal.id === id);
+  const form = document.getElementById("goal-form");
+  editingGoalId = g.id;
+  form.exercise_id.value = g.exercise_id;
+  form.target_weight_kg.value = g.target_weight_kg;
+  form.target_reps.value = g.target_reps;
+  form.target_date.removeAttribute("min"); // an existing goal may already be past its date
+  form.target_date.value = g.target_date;
+  document.getElementById("goal-form-heading").textContent = `Edit ${goalName(g)} goal`;
+  document.getElementById("cancel-goal-edit").hidden = false;
+  renderGoals();
+  renderGoalFormState();
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  form.target_weight_kg.focus({ preventScroll: true });
+}
+
+function resetGoalForm() {
+  editingGoalId = null;
+  const form = document.getElementById("goal-form");
+  form.reset();
+  form.target_date.min = isoDay(new Date()); // the service refuses a new goal in the past
+  const inFourWeeks = new Date();
+  inFourWeeks.setDate(inFourWeeks.getDate() + 28);
+  form.target_date.value = isoDay(inFourWeeks);
+  document.getElementById("goal-form-heading").textContent = "New goal";
+  document.getElementById("cancel-goal-edit").hidden = true;
+  renderGoals();
+  renderGoalFormState();
+}
+
+async function deleteGoal(id, button) {
+  const done = await withButton(button, "Deleting...", async () => {
+    await api.deleteGoal(id);
+    return true;
+  });
+  if (!done) return;
+  if (editingGoalId === id) resetGoalForm();
+  toast("Goal deleted.");
+  await loadGoals();
+}
+
+document.getElementById("goal-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const goal = {
+    exercise_id: Number(form.exercise_id.value),
+    target_weight_kg: Number(form.target_weight_kg.value),
+    target_reps: Number(form.target_reps.value),
+    target_date: form.target_date.value,
+  };
+  const wasEditing = editingGoalId;
+  const saved = await withButton(document.getElementById("save-goal"), "Saving...", () =>
+    wasEditing ? api.updateGoal(wasEditing, goal) : api.createGoal(goal));
+  if (!saved) return;
+  toast(`${wasEditing ? "Saved" : "Added"} goal: ${goalName(saved)} ${kg(saved.target_weight_kg)} kg × ${saved.target_reps}.`);
+  resetGoalForm();
+  await loadGoals();
+});
+
+document.getElementById("cancel-goal-edit").addEventListener("click", resetGoalForm);
+
+async function loadRecords(exerciseId) {
+  if (state.records.has(exerciseId)) return;
+  state.records.set(exerciseId, { loading: true });
+  try {
+    state.records.set(exerciseId, await api.exerciseRecords(exerciseId));
+  } catch (error) {
+    state.records.set(exerciseId, { error: error.message });
+  }
+  if (recordsExerciseId === exerciseId) renderRecords();
+}
+
+// One exercise at a time, chosen with chips like the coach card. Each answer also tells
+// which records are new since the last check, so a PR from today's session stands out.
+function renderRecords() {
+  const chips = document.getElementById("pr-chips");
+  const body = document.getElementById("pr-body");
+  if (!exerciseById(recordsExerciseId)) recordsExerciseId = state.exercises[0]?.id ?? null;
+  put(chips, ...state.exercises.map((ex) =>
+    el("button", {
+      type: "button", role: "tab", class: "chip", "aria-controls": "pr-body",
+      "aria-selected": String(ex.id === recordsExerciseId),
+      onclick: () => { recordsExerciseId = ex.id; renderRecords(); },
+    }, ex.name)));
+  chips.hidden = state.exercises.length === 0;
+  const ex = exerciseById(recordsExerciseId);
+  if (!ex) {
+    if (state.loading) return put(body, el("p", { class: "records-msg" }, "Loading exercises..."));
+    if (state.loadError) return put(body, el("div", { class: "records-msg" }, state.loadError,
+      el("div", {}, el("button", { type: "button", class: "ghost small retry", onclick: retryLoad }, "Try again"))));
+    return put(body, el("p", { class: "records-msg" }, "Add an exercise and log a session to see your records."));
+  }
+  if (document.getElementById("view-progress").hidden) return; // fetched when the tab opens
+  const rec = state.records.get(ex.id);
+  if (!rec) loadRecords(ex.id);
+  if (!rec || rec.loading) return put(body, el("p", { class: "records-msg" }, `Loading ${ex.name} records...`));
+  if (rec.error) {
+    return put(body, el("div", { class: "records-msg" }, rec.error,
+      el("div", {}, el("button", { type: "button", class: "ghost small retry",
+        onclick: () => { state.records.delete(ex.id); renderRecords(); } }, "Try again"))));
+  }
+  if (rec.records.length === 0) {
+    return put(body, el("p", { class: "records-msg" }, `No ${ex.name} sets logged yet. Your records show up after your first session.`));
+  }
+  put(body,
+    el("p", { class: "records-caption" }, "Heaviest weight for each number of reps"),
+    el("table", { class: "set-table records-table" },
+      el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Reps"), el("th", { scope: "col" }, "Best"), el("th", { scope: "col", class: "right" }, "When"))),
+      el("tbody", {}, ...rec.records.map((r) =>
+        el("tr", { class: r.new ? "new" : "" },
+          el("td", { class: "mono" }, String(r.reps)),
+          el("td", {}, el("strong", { class: "mono" }, `${kg(r.weight_kg)} kg`),
+            r.new ? el("span", { class: "pr-new" }, icon("spark"), "New") : null),
+          el("td", { class: "right muted" }, formatDate(r.achieved_on)))))));
+}
+
 // --- start ---------------------------------------------------------------------------------
 
 renderGreeting();
 resetLogForm();
+resetGoalForm();
 renderAll();
 showView(location.hash.slice(1));
 loadAll();

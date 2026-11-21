@@ -27,8 +27,10 @@ The UI works on a phone (tab bar at the bottom) and on a desktop (two columns fr
 - **When a service is down:** the app says so in plain words and keeps working where it
   can, e.g. with the workouts service stopped you get a banner and a "Try again" button
   instead of a broken page.
-- **Goals and personal records:** the goals API is done (#21); personal records (#20) and
-  their screens (#22) are in progress this sprint.
+- **Progress:** set goals such as *Bench press 65 kg × 8 by 19 Dec* and see how close you
+  are (a bar, your best qualifying set, days left or "Achieved"), and see your **personal
+  records**: the heaviest weight for each number of reps per exercise, with records set
+  since your last look marked *New*. Goals still show while the workouts service is down.
 
 ## Architecture
 

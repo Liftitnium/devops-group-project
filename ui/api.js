@@ -62,5 +62,12 @@
     deleteWorkout: (id) => workoutsApi("DELETE", `/workouts/${id}`),
 
     nextSession: (exerciseId) => progressApi("GET", `/exercises/${exerciseId}/next-session`),
+    exerciseRecords: (exerciseId) => progressApi("GET", `/exercises/${exerciseId}/records`),
+
+    listGoals: () => progressApi("GET", "/goals"),
+    createGoal: (goal) => progressApi("POST", "/goals", goal),
+    updateGoal: (id, goal) => progressApi("PUT", `/goals/${id}`, goal),
+    deleteGoal: (id) => progressApi("DELETE", `/goals/${id}`),
+    goalProgress: (id) => progressApi("GET", `/goals/${id}/progress`),
   };
 })();
