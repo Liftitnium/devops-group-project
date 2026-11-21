@@ -312,3 +312,43 @@ button.busy { opacity: 0.85; cursor: progress; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* progress: goals and personal records ------------------------------------------------- */
+.goals { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
+.goal { padding: 0.95rem 1rem 0.75rem; }
+.goal.editing { border-color: var(--accent); }
+.goal-top { display: flex; align-items: center; gap: 0.6rem; }
+.goal-top strong { overflow-wrap: anywhere; }
+.goal-status { flex: none; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 999px; color: var(--muted); background: var(--surface-2); }
+.goal-status.soon { color: var(--accent-ink); background: var(--accent-soft); }
+.goal-status.late { color: var(--danger); background: var(--danger-soft); }
+.goal-status.done { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.goal-target { margin: 0.3rem 0 0.75rem; color: var(--muted); font-size: 0.9rem; }
+.goal-target .mono { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+.goal-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.goal-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.5s var(--ease-out); }
+.goal.achieved .goal-bar i { background: var(--ok); }
+.goal-foot { display: flex; align-items: baseline; gap: 0.6rem; margin: 0.5rem 0 0.6rem; font-size: 0.82rem; color: var(--muted); }
+.goal-detail { flex: 1; min-width: 0; }
+.goal-detail .mono, .goal-percent { font-family: var(--mono); }
+.goal-detail strong { color: var(--text); }
+.goal-percent { flex: none; font-weight: 600; color: var(--text); }
+.goal-form { margin-top: 0.8rem; display: grid; gap: 0.8rem; }
+.goal-form h2 { font-size: 1rem; }
+.goal-form .num { width: 6.5rem; flex: 0 0 6.5rem; }
+.goal-form .grow { flex: 1 1 9rem; }
+
+.records { padding: 1rem; }
+.records .chip { color: var(--text); border-color: var(--border); }
+.records .chip:hover { background: var(--surface-2); }
+.records .chip[aria-selected="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.records .chip:focus-visible { outline-color: var(--accent); }
+.records-msg { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 0.8rem 0.4rem; }
+.records-msg .retry { margin-top: 0.6rem; }
+.records-caption { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+.records-table { margin-bottom: 0; }
+.records-table th { text-align: left; font-size: 0.75rem; font-weight: 700; color: var(--muted); padding: 0 0 0.35rem; }
+.records-table td:first-child { width: 3.5rem; color: var(--muted); }
+.records-table .right { text-align: right; }
+.records-table tr.new strong { color: var(--accent-ink); }
+.pr-new { display: inline-flex; align-items: center; gap: 0.2rem; margin-left: 0.5rem; font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 999px; color: var(--accent-ink); background: var(--accent-soft); vertical-align: 0.1em; }
