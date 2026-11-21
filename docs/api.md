@@ -103,3 +103,28 @@ attempt is the heaviest set done for at least `target_reps` reps.
 
 `best_weight_kg` and `best_on` are `null` with no qualifying set (`percent` 0). `percent` is
 capped at 100; `days_left` is negative once the date has passed. `503` while workouts is down.
+
+## UI → progress: personal records (#20)
+
+`GET /exercises/{exercise_id}/records`: the heaviest weight for each exact rep count, worked
+out from the full workouts history, fewest reps first. Each call also saves them, and `new` is
+`true` when a PR beats what was saved at the previous call (or there was none), so the UI can
+highlight it.
+
+```json
+{
+  "exercise_id": 3,
+  "exercise_name": "Bench press",
+  "records": [
+    {"reps": 5, "weight_kg": 70.0, "achieved_on": "2026-11-17", "new": false},
+    {"reps": 8, "weight_kg": 62.5, "achieved_on": "2026-11-17", "new": true}
+  ]
+}
+```
+
+`records` is `[]` when the exercise was never performed. `404` when the exercise does not
+exist, `503` while workouts is down, `502` when it sends unusable history.
+
+`GET /records[?exercise_id=N]`: the PRs saved at the last check of each exercise, ordered by
+`exercise_id` then `reps`, as `[{"exercise_id", "reps", "weight_kg", "achieved_on"}]`. It only
+reads the progress database, so it keeps working while workouts is down.

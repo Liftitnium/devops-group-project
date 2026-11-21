@@ -1,8 +1,8 @@
 # Data model
 
 **Must match the migrations** in `services/*/migrations/`. Each owner updates their half
-in the same PR as the migration. workouts: `001_init.sql`. progress: `001_goals.sql`
-(personal records: planned, `002`).
+in the same PR as the migration. workouts: `001_init.sql`. progress: `001_goals.sql`,
+`002_personal_records.sql`.
 
 ## workouts database
 
@@ -66,4 +66,9 @@ on `exercise_id`, plus `created_at` (UTC). A goal means "lift `target_weight_kg`
 `target_reps` reps by `target_date`". How close a goal is, is not stored: it is computed from the
 workouts history on every request (`GET /goals/{id}/progress`).
 
-`personal_records` is not created yet (#20, `002`).
+`personal_records` (`002_personal_records.sql`): the heaviest `weight_kg` for each exact `reps`
+count of an exercise, and the first day it was lifted (`achieved_on`). `(exercise_id, reps)` is
+unique, `weight_kg >= 0` (`DECIMAL(6,2)`), `reps >= 1`, plus `created_at` (UTC). The rows of an
+exercise are rebuilt from the workouts history each time `GET /exercises/{id}/records` is
+called, so a deleted or corrected workout corrects its PRs too. They are stored so `GET /records`
+can show the last known PRs while workouts is down, and so the API can mark which PRs are new.
