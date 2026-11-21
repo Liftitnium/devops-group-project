@@ -11,12 +11,13 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from app import goals_repository as repo
 from app.db import Connection, get_db
-from app.errors import InvalidInputError, NotFoundError, UpstreamError
-from app.goals import LoggedSet, goal_progress
+from app.errors import InvalidInputError, NotFoundError
+from app.goals import goal_progress
+from app.history import fetch_sets
 
 router = APIRouter()
 Db = Annotated[Connection, Depends(get_db)]
@@ -48,27 +49,6 @@ class GoalProgressOut(BaseModel):
     percent: int
     achieved: bool
     days_left: int
-
-
-# what we read from workouts: GET /exercises/{id}/history (contract in docs/api.md)
-class _Exercise(BaseModel):
-    id: int
-    name: str
-
-
-class _Set(BaseModel):
-    weight_kg: Decimal
-    reps: int
-
-
-class _Session(BaseModel):
-    performed_on: date
-    sets: list[_Set]
-
-
-class _History(BaseModel):
-    exercise: _Exercise
-    sessions: list[_Session]
 
 
 # ---------- helpers ----------
@@ -138,28 +118,17 @@ def delete_goal(goal_id: int, conn: Db):
 @router.get("/goals/{goal_id}/progress", response_model=GoalProgressOut)
 def get_goal_progress(goal_id: int, request: Request, conn: Db):
     goal = _goal_or_404(conn, goal_id)
-    try:
-        raw = request.app.state.workouts.get_json(f"/exercises/{goal['exercise_id']}/history")
-    except NotFoundError as e:
-        raise NotFoundError(
-            f"Exercise {goal['exercise_id']} of this goal no longer exists in the workouts service."
-        ) from e
-    try:
-        history = _History.model_validate(raw)
-    except ValidationError as e:
-        raise UpstreamError(f"the workouts service sent history we cannot use: {e}") from e
-
-    sets = [
-        LoggedSet(session.performed_on, s.weight_kg, s.reps)
-        for session in history.sessions
-        for s in session.sets
-    ]
+    exercise_name, sets = fetch_sets(
+        request.app.state.workouts,
+        goal["exercise_id"],
+        f"Exercise {goal['exercise_id']} of this goal no longer exists in the workouts service.",
+    )
     progress = goal_progress(
         Decimal(goal["target_weight_kg"]), goal["target_reps"], goal["target_date"], sets, date.today()
     )
     return GoalProgressOut(
         goal=Goal.model_validate(goal),
-        exercise_name=history.exercise.name,
+        exercise_name=exercise_name,
         best_weight_kg=float(progress.best_weight_kg) if progress.best_weight_kg is not None else None,
         best_on=progress.best_on,
         percent=progress.percent,
