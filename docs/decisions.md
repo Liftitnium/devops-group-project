@@ -169,3 +169,60 @@ is down the coach answers 503 with a readable message and logging keeps working.
 are fixed per body part, so very light or very heavy exercises progress less precisely.
 
 ## ADR-6: _optional, e.g. frontend choice or authentication_
+
+## ADR-7: Database access in Azure
+
+**Status:** accepted (2026-11-19)
+
+**Context.** Both services reach their Azure SQL database over the network. Two questions:
+which identity each service connects as, and which networks may reach the SQL server.
+Until 19 Nov both services connected as the server administrator, so one compromised
+service could read, change or drop both databases.
+
+**Decision.**
+
+- *Identity:* each service connects as its own contained database user (`workouts_app`,
+  `progress_app`), which exists only in that service's database and is `db_owner` there so
+  it can run its own migrations. `infra/setup.sh` creates the users with
+  `infra/sql/app-user.sql`; the admin password is used only by that script, never by an app.
+  This matches `docker compose`, where each service also has its own login.
+- *Network:* the SQL server keeps public network access with one firewall rule, Azure's
+  "Allow Azure services" (`0.0.0.0`). `setup.sh` adds a rule for the operator's own IP only
+  while it creates the users and removes it on exit. TLS 1.2 is the minimum.
+
+**Alternatives.** Private endpoint plus VNet-integrated Container Apps environment: the SQL
+server would not be reachable from the internet at all, but it needs a VNet, a private DNS
+zone and a workload-profile environment, which are outside the resource list the brief
+allows and add cost. Microsoft Entra authentication with managed identities: no SQL
+passwords at all, but it needs an Entra admin on the server and the IE directory does not
+let students register applications or assign directory roles.
+
+**Consequences.** A leaked service password exposes one database, not both, and cannot be
+used to create logins or touch the other database. "Allow Azure services" admits any Azure
+resource, including other customers' resources, to attempt a login; that risk is carried
+by the passwords, which are long, random and stored only in `.env` and Container App
+secrets. If the project outlived the course, the private endpoint is the first change to
+make.
+
+## ADR-8: No user accounts in the API
+
+**Status:** accepted (2026-11-19)
+
+**Context.** LiftLog is a single-user demo: one lifter, one set of workouts. The brief asks
+for two services, a UI and a pipeline; it does not ask for sign-in. Both APIs are public
+HTTPS endpoints so the Static Web App can call them from the browser.
+
+**Decision.** The APIs have no authentication. CORS allows only the UI's origin, so other
+websites cannot call the API from a visitor's browser. The OpenAPI page (`/docs`,
+`/openapi.json`) stays public because the API documentation and the demo use it.
+
+**Alternatives.** Entra ID (Easy Auth on the Container Apps and the Static Web App): real
+sign-in with no code, but every member and the professor would need an account set up for
+the demo, and the IE directory does not let us register the application. An API key in the
+UI: anyone can read it from the page source, so it protects nothing.
+
+**Consequences.** Anyone who knows a service URL can read, create, change and delete
+workouts with a tool such as curl; CORS only stops browsers. This is acceptable because the
+data is test data with no personal information, and we say so in the demo. Adding users
+later means a `user_id` column on exercises and workouts, Easy Auth in front of both
+services, and the workouts service passing the user on to progress.

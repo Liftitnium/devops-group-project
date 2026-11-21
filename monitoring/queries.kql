@@ -1,8 +1,10 @@
-// Log Analytics queries for the dashboard and the SLO (brief §6).
-// Run them in the Container Apps environment's workspace (<prefix>-logs), then save each
-// one ("Save as query") and pin it to the dashboard or add it to a Workbook.
+// Log Analytics queries for the dashboard and the SLO (brief §6, issues #18 and #19).
+// infra/main.bicep turns every section below into a saved query in the workspace
+// (<prefix>-logs > Logs > Queries > category "LiftLog"), so editing this file and
+// re-running infra/setup.sh is the only way they change. Each section starts with a line of
+// ten dashes, a number and a title, as below; the title becomes the saved query's name.
 //
-// Every service logs one JSON line per request (app/logs.py):
+// Every service logs one JSON line per request (app/logs.py), INFO level, no bodies:
 //   {"time", "level", "service", "logger", "msg", "method", "path", "status", "duration_ms"}
 // Container Apps puts that line in ContainerAppConsoleLogs_CL.Log_s.
 // /health is excluded everywhere: it is the pipeline's probe, not user traffic.
@@ -39,10 +41,11 @@ ContainerAppConsoleLogs_CL
 | render timechart
 
 
-// ---------- 4. SLO (DRAFT, the team decides the final wording) ----------
-// "99% of GET requests to the workouts API are answered successfully in under 500 ms,
-//  measured over 7 days."
-// Cold starts (scale from zero) count against the budget on purpose: users feel them.
+// ---------- 4. SLO: workouts GET under 500 ms, last 7 days ----------
+// SLO: "99% of GET requests to the workouts API are answered without a server error in
+// under 500 ms, measured over a rolling 7 days." (README, Monitoring)
+// Cold starts (scale from zero, database waking from auto-pause) count against the
+// budget on purpose: users feel them.
 let target = 99.0;
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(7d)
@@ -57,7 +60,33 @@ ContainerAppConsoleLogs_CL
 | extend met = sli_pct >= target_pct
 
 
-// ---------- 5. Recent errors, for debugging ----------
+// ---------- 5. SLO: daily SLI against the 99% target ----------
+// The same SLI per day, to see when the budget was spent (e.g. cold starts after idle).
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend e = parse_json(Log_s)
+| where tostring(e.service) == "workouts" and tostring(e.method) == "GET"
+    and isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| summarize sli_pct = round(100.0 * countif(toint(e.status) < 500 and todouble(e.duration_ms) < 500) / count(), 2)
+    by bin(TimeGenerated, 1d)
+| extend target_pct = 99.0
+| render timechart
+
+
+// ---------- 6. Slowest endpoints, last 24 hours ----------
+// Ids in paths are folded (/exercises/3 -> /exercises/{id}) so each endpoint is one row.
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend e = parse_json(Log_s)
+| where isnotempty(e.duration_ms) and tostring(e.path) != "/health"
+| extend endpoint = strcat(tostring(e.method), " ", replace_regex(tostring(e.path), @"/\d+", "/{id}"))
+| summarize requests = count(), p95_ms = percentile(todouble(e.duration_ms), 95),
+            errors = countif(toint(e.status) >= 500)
+    by service = tostring(e.service), endpoint
+| order by p95_ms desc
+
+
+// ---------- 7. Recent errors, for debugging ----------
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(24h)
 | extend e = parse_json(Log_s)

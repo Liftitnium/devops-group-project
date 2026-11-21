@@ -169,3 +169,18 @@ def test_endpoint_404_names_the_exercise_when_workouts_does_not_know_it():
     response = client_with(fake).get("/exercises/42/next-session")
     assert response.status_code == 404
     assert response.json() == {"detail": "Exercise 42 not found."}
+
+
+@pytest.mark.parametrize(
+    ("performed", "expected"),
+    [
+        (sets(60, 12, 12), "Every set at 60 kg reached 12 reps. Add weight and start again at 8 reps."),
+        (sets(60, 12), "Your set at 60 kg reached 12 reps. Add weight and start again at 8 reps."),
+        (sets(60, 10, 9), "Stay at 60 kg and aim for 10 reps on every set."),
+        (sets("62.5", 8), "Stay at 62.5 kg and aim for 9 reps."),
+        (sets(60, 5, 6), "No set at 60 kg reached 8 reps. Drop about 10% and build back up."),
+        (sets(60, 5), "Your set at 60 kg fell short of 8 reps. Drop about 10% and build back up."),
+    ],
+)
+def test_reason_matches_the_number_of_sets_and_prints_weights_plainly(performed, expected):
+    assert next_session(performed, 8, 12, "upper").reason == expected

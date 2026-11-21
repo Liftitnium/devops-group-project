@@ -21,6 +21,7 @@ from app.db import check_health, connect, migrate
 from app.errors import DomainError
 from app.gateway import HttpWorkoutsGateway
 from app.goals_api import router as goals_router
+from app.records_api import router as records_router
 
 log = logging.getLogger(SERVICE_NAME)
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
@@ -112,4 +113,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(coach_router)
     app.include_router(goals_router)
+    app.include_router(records_router)
     return app
