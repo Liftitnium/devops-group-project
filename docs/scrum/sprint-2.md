@@ -57,7 +57,7 @@ Done (merged, deployed and checked against the acceptance criteria):
 - #22 UI for personal records and goals: the Progress tab (PR #44, Emma).
 - #23 Smoke test against the deployed API, run after every deploy (PR #39, Raji).
 - #24 Data model doc matches the migrations: progress half by David (PR #46), workouts half
-  by Lorenzo (PR #50, _open on 23 Nov_).
+  by Lorenzo (PR #50).
 - #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47 _open on 23 Nov_).
 
 Also done, not in the plan:
