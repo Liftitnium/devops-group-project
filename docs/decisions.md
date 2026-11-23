@@ -103,8 +103,10 @@ member of the team, not only the one who wrote it.
 
 **Decision.** The UI is plain HTML, CSS and JavaScript with no framework and no build step
 (`ui/`). One page has five tabs switched by the URL hash. All calls to the services go
-through `ui/api.js`, which gives every request a 10 s time limit (Azure SQL serverless can
-take several seconds to wake up) and turns any failure into a sentence the user can read.
+through `ui/api.js`, which gives every request a time limit and turns any failure into a
+sentence the user can read. On Azure the services and databases sleep when idle and the
+first request can take up to a minute, so a read that times out is tried again for up to
+90 s while a "Starting up" banner shows; a save is never sent twice.
 The browser calls both services directly; CORS on each service allows only the UI's origin.
 The service addresses live in `ui/config.js`, which the pipeline overwrites with the Azure
 URLs, so the same files run locally and in Azure. Text from the services is always set with
