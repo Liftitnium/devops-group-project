@@ -12,52 +12,71 @@ erDiagram
     WORKOUT  ||--o{ WORKOUT_SET : contains
     EXERCISE {
         int id PK
-        string name UK
+        string name UK "max 100"
         string body_part "upper | lower"
-        int rep_range_min
-        int rep_range_max
+        int rep_range_min ">= 1"
+        int rep_range_max ">= rep_range_min"
+        datetime created_at
     }
     WORKOUT {
         int id PK
-        date performed_on
-        string notes
+        date performed_on "indexed, newest first"
+        string notes "max 500, default empty"
+        datetime created_at
     }
     WORKOUT_SET {
         int id PK
-        int workout_id FK
-        int exercise_id FK
-        int set_number
-        decimal weight_kg
-        int reps
+        int workout_id FK, UK "cascade delete"
+        int exercise_id FK, UK "indexed with workout_id"
+        int set_number UK "unique per workout and exercise"
+        decimal weight_kg ">= 0"
+        int reps ">= 1"
     }
 ```
 
 Rules enforced in the database: exercise names are unique; `body_part` is `upper` or
 `lower`; `1 <= rep_range_min <= rep_range_max`; `weight_kg >= 0`; `reps >= 1`;
 `(workout_id, exercise_id, set_number)` is unique. Deleting a workout deletes its sets
-(`ON DELETE CASCADE`); an exercise that has sets cannot be deleted. Every table also has
-`created_at` (UTC). `weight_kg` is `DECIMAL(6,2)`, so 62.5 kg is stored exactly.
+(`ON DELETE CASCADE`); an exercise that has sets cannot be deleted. `exercises` and
+`workouts` also have `created_at` (UTC); `workout_sets` does not. `weight_kg` is
+`DECIMAL(6,2)`, so 62.5 kg is stored exactly.
+
+Text lengths: `exercises.name` is `NVARCHAR(100)` and `workouts.notes` is `NVARCHAR(500)`.
+`notes` is never null: it defaults to an empty string.
+
+Indexes: `workouts` is indexed on `performed_on DESC`, for listing the most recent workouts
+first; `workout_sets` is indexed on `(exercise_id, workout_id)`, for reading one exercise's
+history (what the coach, goals and PRs read).
 
 ## progress database
 
 No foreign keys to the workouts database (it is another service). `exercise_id` is a
-reference by value, checked through the workouts API.
+reference by value, checked through the workouts API; the dotted lines below are those
+references, not database constraints. `EXERCISE` is shown only to make them readable: it
+lives in the workouts database.
 
 ```mermaid
 erDiagram
+    EXERCISE ||..o{ GOAL : "targeted by (by value)"
+    EXERCISE ||..o{ PERSONAL_RECORD : "has (by value)"
+    EXERCISE {
+        int id PK "in the workouts database"
+    }
     GOAL {
         int id PK
-        int exercise_id "ref to workouts"
-        decimal target_weight_kg
-        int target_reps
+        int exercise_id "ref to workouts, indexed"
+        decimal target_weight_kg "> 0"
+        int target_reps ">= 1"
         date target_date
+        datetime created_at
     }
     PERSONAL_RECORD {
         int id PK
-        int exercise_id "ref to workouts"
-        decimal weight_kg
-        int reps
+        int exercise_id UK "ref to workouts, unique with reps"
+        int reps UK ">= 1"
+        decimal weight_kg ">= 0"
         date achieved_on
+        datetime created_at
     }
 ```
 
