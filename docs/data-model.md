@@ -51,23 +51,32 @@ history (what the coach, goals and PRs read).
 ## progress database
 
 No foreign keys to the workouts database (it is another service). `exercise_id` is a
-reference by value, checked through the workouts API.
+reference by value, checked through the workouts API; the dotted lines below are those
+references, not database constraints. `EXERCISE` is shown only to make them readable: it
+lives in the workouts database.
 
 ```mermaid
 erDiagram
+    EXERCISE ||..o{ GOAL : "targeted by (by value)"
+    EXERCISE ||..o{ PERSONAL_RECORD : "has (by value)"
+    EXERCISE {
+        int id PK "in the workouts database"
+    }
     GOAL {
         int id PK
-        int exercise_id "ref to workouts"
-        decimal target_weight_kg
-        int target_reps
+        int exercise_id "ref to workouts, indexed"
+        decimal target_weight_kg "> 0"
+        int target_reps ">= 1"
         date target_date
+        datetime created_at
     }
     PERSONAL_RECORD {
         int id PK
-        int exercise_id "ref to workouts"
-        decimal weight_kg
-        int reps
+        int exercise_id UK "ref to workouts, unique with reps"
+        int reps UK ">= 1"
+        decimal weight_kg ">= 0"
         date achieved_on
+        datetime created_at
     }
 ```
 
