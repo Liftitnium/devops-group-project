@@ -92,7 +92,36 @@ model (no data to train it on).
 is down the coach answers 503 with a readable message and logging keeps working. Increments
 are fixed per body part, so very light or very heavy exercises progress less precisely.
 
-## ADR-6: _optional, e.g. frontend choice or authentication_
+## ADR-6: Frontend in plain HTML, CSS and JavaScript
+
+**Status:** accepted (2026-11-23)
+
+**Context.** LiftLog needs a web page to log workouts, see history, follow the coach and
+manage goals. It has to call two services, keep working when one of them is down, run
+locally with `docker compose` and in Azure without changes, and be understood by every
+member of the team, not only the one who wrote it.
+
+**Decision.** The UI is plain HTML, CSS and JavaScript with no framework and no build step
+(`ui/`). One page has five tabs switched by the URL hash. All calls to the services go
+through `ui/api.js`, which gives every request a 10 s time limit (Azure SQL serverless can
+take several seconds to wake up) and turns any failure into a sentence the user can read.
+The browser calls both services directly; CORS on each service allows only the UI's origin.
+The service addresses live in `ui/config.js`, which the pipeline overwrites with the Azure
+URLs, so the same files run locally and in Azure. Text from the services is always set with
+`textContent`, never `innerHTML`, so a workout note can't inject HTML into the page.
+
+**Alternatives.** React or Vue: components and state handling for free, but a build step,
+`node_modules` and a framework most of the team would have to learn in a two-week project.
+Server-rendered pages from one of the services: fewer moving parts in the browser, but that
+service would have to call the other one for every page, and the UI would go down whenever
+it did. An API gateway in front of both services: one address for the browser, but one more
+thing to deploy, and it is not in the brief's resource list.
+
+**Consequences.** Nothing to install or build, and the Static Web App only serves files.
+Each page handles a down service on its own: when workouts is down the Log page says why
+saving is off, and goals still show because they live in the progress database. Without a
+framework, `app.js` builds the page by hand and is long (almost 1,000 lines); if LiftLog kept
+growing, splitting it into modules or moving to a framework would be the next step.
 
 ## ADR-7: Database access in Azure
 
