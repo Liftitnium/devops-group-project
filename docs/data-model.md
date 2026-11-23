@@ -35,8 +35,16 @@ erDiagram
 Rules enforced in the database: exercise names are unique; `body_part` is `upper` or
 `lower`; `1 <= rep_range_min <= rep_range_max`; `weight_kg >= 0`; `reps >= 1`;
 `(workout_id, exercise_id, set_number)` is unique. Deleting a workout deletes its sets
-(`ON DELETE CASCADE`); an exercise that has sets cannot be deleted. Every table also has
-`created_at` (UTC). `weight_kg` is `DECIMAL(6,2)`, so 62.5 kg is stored exactly.
+(`ON DELETE CASCADE`); an exercise that has sets cannot be deleted. `exercises` and
+`workouts` also have `created_at` (UTC); `workout_sets` does not. `weight_kg` is
+`DECIMAL(6,2)`, so 62.5 kg is stored exactly.
+
+Text lengths: `exercises.name` is `NVARCHAR(100)` and `workouts.notes` is `NVARCHAR(500)`.
+`notes` is never null: it defaults to an empty string.
+
+Indexes: `workouts` is indexed on `performed_on DESC`, for listing the most recent workouts
+first; `workout_sets` is indexed on `(exercise_id, workout_id)`, for reading one exercise's
+history (what the coach, goals and PRs read).
 
 ## progress database
 
