@@ -12,23 +12,25 @@ erDiagram
     WORKOUT  ||--o{ WORKOUT_SET : contains
     EXERCISE {
         int id PK
-        string name UK
+        string name UK "max 100"
         string body_part "upper | lower"
-        int rep_range_min
-        int rep_range_max
+        int rep_range_min ">= 1"
+        int rep_range_max ">= rep_range_min"
+        datetime created_at
     }
     WORKOUT {
         int id PK
-        date performed_on
-        string notes
+        date performed_on "indexed, newest first"
+        string notes "max 500, default empty"
+        datetime created_at
     }
     WORKOUT_SET {
         int id PK
-        int workout_id FK
-        int exercise_id FK
-        int set_number
-        decimal weight_kg
-        int reps
+        int workout_id FK, UK "cascade delete"
+        int exercise_id FK, UK "indexed with workout_id"
+        int set_number UK "unique per workout and exercise"
+        decimal weight_kg ">= 0"
+        int reps ">= 1"
     }
 ```
 
