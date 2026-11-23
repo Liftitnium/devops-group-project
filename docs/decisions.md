@@ -40,32 +40,108 @@ startup retries the connection with backoff.
 
 ## ADR-3: Deployment and pipeline
 
-**Context.** Main must stay deployable; deployment must be automatic and verified.
+**Status:** accepted (2026-11-20)
 
-**Decision.** One GitHub Actions workflow. CI on every PR/push. On main: images to GHCR
-tagged by commit SHA, `az containerapp update`, Static Web App upload, then `/health`
-polled until it reports the new SHA. Infrastructure is Bicep (`infra/`), applied by
-`infra/setup.sh`.
+**Context.** `main` must always be deployable, and every merge must reach Azure without
+anyone running commands by hand. A deploy only counts if the new version really answers.
+The pipeline also needs a way to sign in to Azure: the IE directory does not let students
+register applications, so we cannot create a service principal with a client secret.
 
-**Alternatives.** Separate CI and CD workflows chained with `workflow_run`: harder to read
-and to guarantee CD ran on exactly the commit CI tested. Azure CLI script instead of Bicep:
-works, but not declarative and not credited.
+**Decision.**
 
-**Consequences.** A red CI never deploys. A deploy that does not come up healthy fails the
-run visibly. Re-running Bicep keeps the images currently deployed.
+- *One workflow* (`.github/workflows/pipeline.yml`). Every pull request and push runs CI:
+  ruff, tests against a throwaway SQL Server with a 70% coverage floor, `pip-audit`, a
+  gitleaks scan of the whole history, and an image build. A final `ci` job is the one
+  check the `main` ruleset requires; it fails if any job before it did not succeed.
+- *Continuous deployment on `main` only*, after `ci` passed: images pushed to GHCR tagged
+  with the commit SHA, `az containerapp update` for both services, `ui/config.js` written
+  with the Azure URLs and the UI uploaded to the Static Web App.
+- *Verified deploys.* The run polls `/health` until it reports the new SHA (5 minutes, to
+  survive scale from zero and a paused database), then `scripts/smoke_test.sh` creates an
+  exercise and a workout on the live API, asks progress for the next session, and deletes
+  them again. Either failing fails the run.
+- *Sign-in without a stored secret.* The deploy job signs in with OIDC as the managed
+  identity `sdd-3b-g6-github`, which the professor provides with access to our resource
+  group only. Its federated credential must trust tokens for this repository's
+  `production` environment
+  (`repo:Liftitnium/devops-group-project:environment:production`). If
+  `AZURE_CLIENT_ID` is not set, the job falls back to a service principal in the
+  `AZURE_CREDENTIALS` secret.
+- *Infrastructure apart from releases.* `infra/main.bicep` declares every resource and is
+  applied by `infra/setup.sh`, run by a member. The pipeline only changes images. The
+  script also creates the services' database users (ADR-7), which needs the SQL admin
+  password; keeping it out of GitHub means one secret fewer to leak.
+
+**Alternatives.**
+
+- Separate CI and CD workflows chained with `workflow_run`: harder to read, and harder to
+  guarantee CD runs on exactly the commit CI tested.
+- Run Bicep on every deploy: slower, and the SQL admin password would have to be a GitHub
+  secret.
+- A service principal with a client secret: not allowed in the IE directory, and the
+  secret would have to be stored and rotated.
+- An Azure CLI script instead of Bicep: works, but it is not declarative and not credited.
+- Health check only: a service can answer `/health` while its main endpoints are broken,
+  for example after a bad migration or a wrong `WORKOUTS_URL`.
+
+**Consequences.**
+
+- A red CI never deploys, and a deploy that does not come up healthy and pass the smoke
+  test fails visibly in the run.
+- The smoke test writes to the live database for a few seconds and cleans up after itself,
+  also when it fails.
+- Infrastructure changes are rare and need `setup.sh`. Nobody changes resources in the
+  portal, because Bicep would undo the change on the next run.
+- While the managed identity is not ready, the latest `main` is deployed by hand with the
+  same steps (image update, UI upload, health check, smoke test), first on 20 Nov.
 
 ## ADR-4: Monitoring
 
-**Context.** Logs must be queryable in Log Analytics at low volume and cost.
+**Status:** accepted (2026-11-20)
 
-**Decision.** One JSON line per request on stdout (`method`, `path`, `status`,
-`duration_ms`, `service`), INFO level, no bodies. Queries in `monitoring/queries.kql`.
-Workspace daily cap 0.5 GB.
+**Context.** The brief asks for request logs, a dashboard with request count, error rate
+and response time, and one measured SLO, all in Log Analytics (§6–7). Application
+Insights is not allowed, the workspace is free up to 5 GB a month, and the team has to show
+the dashboard and the SLO at the Sprint Review.
 
-**Alternatives.** Application Insights: another Azure service, not allowed. Plain-text
-logs: need regex parsing in every query.
+**Decision.**
 
-**Consequences.** Dashboard and SLO queries are simple `parse_json` + `summarize`.
+- *Logs.* Each service writes one JSON line per request to stdout: `method`, `path`,
+  `status`, `duration_ms`, `service`, at INFO level, with no request or response bodies.
+  Container Apps sends stdout to the workspace `<prefix>-logs`, table
+  `ContainerAppConsoleLogs_CL`, where `parse_json(Log_s)` turns each line back into
+  fields. The workspace keeps 30 days and has a 0.5 GB daily cap.
+- *Dashboard as saved queries.* `monitoring/queries.kql` holds every query, and
+  `infra/main.bicep` turns each section of it into a saved query in the workspace
+  (category `LiftLog`): request count, error rate and response time per service, the two
+  SLO queries, the slowest endpoints and recent errors. `/health` is excluded from all of
+  them, because it is the pipeline's probe, not user traffic.
+- *SLO.* 99% of GET requests to the workouts API are answered without a server error in
+  under 500 ms, over a rolling 7 days. Workouts is the service every screen reads from, so
+  it is what users wait on. One query gives the SLI, whether the target is met and the
+  error budget left; a second shows the SLI per day.
+
+**Alternatives.**
+
+- Application Insights: not allowed by the brief, and a second place to look.
+- A Workbook or a shared portal dashboard: one more resource type, stored as large JSON
+  that is hard to review in a pull request, or made by hand in the portal and lost when the
+  resources are recreated.
+- Plain-text logs: every query would need regex parsing.
+- An alert rule on the SLO: not required, and with a few hundred requests a week one cold
+  start moves the SLI by several points, so it would mostly raise false alarms.
+
+**Consequences.**
+
+- The queries are reviewed in pull requests like code. Changing one means editing the
+  `.kql` file and re-running `infra/setup.sh`.
+- Cold starts (a Container App scaling up from zero, a database waking from auto-pause)
+  count against the SLO on purpose, because users feel them. With little traffic they are
+  the main way the SLO is missed, which is the trade-off of ADR-2's serverless database.
+- Paths contain ids (`/exercises/3`), so queries that group by endpoint fold them into
+  `/exercises/{id}`.
+- If the services start logging more, the daily cap stops ingestion for the rest of the
+  day instead of costing money.
 
 ## ADR-5: Next-session recommendation by double progression
 
