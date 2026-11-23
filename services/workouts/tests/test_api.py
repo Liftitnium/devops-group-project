@@ -150,7 +150,10 @@ def test_deleting_a_workout_deletes_its_sets(client):
 
 def test_missing_workout_is_404(client):
     assert client.get("/workouts/999").json() == {"detail": "Workout 999 not found."}
-    assert client.put("/workouts/999", json={"performed_on": "2026-11-17"}).status_code == 404
+    bench = make_exercise(client)
+    one_set = [{"exercise_id": bench["id"], "weight_kg": 60, "reps": 10}]
+    missing = client.put("/workouts/999", json={"performed_on": "2026-11-17", "sets": one_set})
+    assert missing.status_code == 404
     assert client.delete("/workouts/999").status_code == 404
 
 
@@ -162,6 +165,34 @@ def test_set_with_unknown_exercise_is_422_and_nothing_is_saved(client):
     assert response.status_code == 422
     assert response.json() == {"detail": "Exercise 999 does not exist."}
     assert client.get("/workouts").json() == []
+
+
+@pytest.mark.parametrize("body", [{"performed_on": "2026-11-17"}, {"performed_on": "2026-11-17", "sets": []}])
+def test_workout_without_sets_is_422_and_nothing_is_saved(client, body):
+    response = client.post("/workouts", json=body)
+    assert response.status_code == 422
+    assert "sets" in response.json()["detail"]
+    assert client.get("/workouts").json() == []
+
+
+def test_failed_replace_keeps_the_old_workout_and_its_sets(client):
+    bench = make_exercise(client)
+    two_sets = [{"exercise_id": bench["id"], "weight_kg": 60, "reps": 10}] * 2
+    workout = log_workout(client, "2026-11-17", two_sets)
+    # the second set names an exercise that doesn't exist, so the whole replace is rolled back
+    response = client.put(
+        f"/workouts/{workout['id']}",
+        json={
+            "performed_on": "2026-11-18",
+            "notes": "should not stick",
+            "sets": [
+                {"exercise_id": bench["id"], "weight_kg": 65, "reps": 8},
+                {"exercise_id": 999, "weight_kg": 65, "reps": 8},
+            ],
+        },
+    )
+    assert response.status_code == 422
+    assert client.get(f"/workouts/{workout['id']}").json() == workout
 
 
 @pytest.mark.parametrize(("field", "value"), [("weight_kg", -1), ("reps", 0)])
