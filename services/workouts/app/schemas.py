@@ -47,8 +47,9 @@ class SetIn(BaseModel):
 class WorkoutIn(BaseModel):
     performed_on: date
     notes: str = Field(default="", max_length=500)
-    # sets of one exercise are numbered in the order given here
-    sets: list[SetIn] = Field(default_factory=list, max_length=200)
+    # sets of one exercise are numbered in the order given here; a workout with no sets
+    # would be an empty entry in the history, so at least one is required
+    sets: list[SetIn] = Field(min_length=1, max_length=200)
 
 
 class SetOut(BaseModel):
