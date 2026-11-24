@@ -96,7 +96,7 @@ resource sql 'Microsoft.Sql/servers@2023-08-01-preview' = {
 
 // 0.0.0.0 - 0.0.0.0 is Azure's "allow Azure services" rule: Container Apps can connect,
 // the internet cannot. It also admits resources of other Azure customers, which still need
-// a password; accepted for this project in docs/decisions.md, ADR-7. CI never connects
+// a password; accepted for this project in docs/decisions.md, ADR-2. CI never connects
 // (it uses its own SQL Server container); setup.sh opens its own IP only while it runs.
 resource allowAzure 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
   parent: sql
