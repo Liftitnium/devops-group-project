@@ -124,10 +124,10 @@ password is rotated by running `infra/setup.sh` again with a new value.
 ## Security model
 
 - Each service has its own database user, in both compose and Azure, and cannot open the
-  other service's database ([ADR-7](docs/decisions.md#adr-7-database-access-in-azure)).
+  other service's database ([ADR-2](docs/decisions.md#adr-2-storage-and-database-access)).
 - The APIs have **no sign-in, by design**: LiftLog is a single-user demo with test data.
   CORS stops other websites from calling them, but anyone with a service URL can use the
-  API directly ([ADR-8](docs/decisions.md#adr-8-no-user-accounts-in-the-api)).
+  API directly ([ADR-1](docs/decisions.md#adr-1-two-services-split-by-write-path-vs-analysis-with-no-user-accounts)).
 
 ## Monitoring
 

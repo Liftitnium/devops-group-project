@@ -9,7 +9,7 @@
 #     IMAGE_TAG=<commit sha pushed to GHCR> infra/setup.sh
 #
 # SQL_ADMIN_PASSWORD is only used here, to create the two service users; the services
-# themselves connect as workouts_app and progress_app (see docs/decisions.md, ADR-7).
+# themselves connect as workouts_app and progress_app (see docs/decisions.md, ADR-2).
 # Needs sqlcmd on the PATH, or Docker (it then runs the sqlcmd from the SQL Server image).
 #
 # Optional, only if the GHCR packages are private:
