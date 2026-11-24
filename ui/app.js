@@ -244,6 +244,7 @@ async function checkHealth(name, baseUrl, started = Date.now()) {
     serviceWaking[name] = false;
     serviceDown[name] = !response.ok;
     label.textContent = response.ok ? "up" : "database down";
+    if (response.ok && name === "workouts") renderVersion(await response.json().catch(() => null));
   } catch (error) {
     const slow = error.name === "TimeoutError";
     if (slow && Date.now() - started < HEALTH_WAKE_LIMIT_MS) {
@@ -263,6 +264,17 @@ async function checkHealth(name, baseUrl, started = Date.now()) {
   item.className = serviceDown[name] ? "down" : "up";
   renderWaking();
   renderOutage();
+}
+
+// The commit the services are running, from /health. The pipeline deploys every merge to
+// main, so after a merge this changes to the new commit: proof the change reached Azure.
+function renderVersion(health) {
+  const version = health?.version;
+  if (typeof version !== "string" || !version) return;
+  const node = document.getElementById("version");
+  node.textContent = `Version ${/^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version}`;
+  node.title = version;
+  node.hidden = false;
 }
 
 function renderWaking() {

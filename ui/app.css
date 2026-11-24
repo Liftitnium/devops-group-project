@@ -360,3 +360,6 @@ button.busy { opacity: 0.85; cursor: progress; }
 .status .waking .dot { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 .status .waking .state { color: var(--accent-ink); }
 .hint button.link { font: inherit; font-weight: 700; padding: 0; border: 0; background: none; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* the deployed commit, from /health */
+.version { margin-top: 1.5rem; text-align: center; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
