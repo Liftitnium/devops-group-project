@@ -4,7 +4,7 @@ Log your lifts and get told what to lift next time. LiftLog stores your workouts
 (exercises, sets, weight, reps), detects personal records automatically, tracks goals,
 and recommends the next session's weight with a progressive-overload rule.
 
-**Live:** https://wonderful-grass-0928c6b03.6.azurestaticapps.net · **Status:** Sprint 2 (19–24 Nov 2026)
+**Live:** https://wonderful-grass-0928c6b03.6.azurestaticapps.net (the first request after a quiet period can take up to a minute while Azure wakes the services and databases) · **Status:** Sprint 2 (19–24 Nov 2026)
 
 ![LiftLog home page: this week's sets and volume, the next-session coach and recent workouts](docs/images/home.png)
 
