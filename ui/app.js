@@ -4,7 +4,8 @@
 // Text from the services is always set with textContent, never innerHTML, so a workout
 // note can't inject HTML into the page.
 
-const HEALTH_TIMEOUT_MS = 5000;
+const HEALTH_TIMEOUT_MS = 10000; // one health check
+const HEALTH_WAKE_LIMIT_MS = 90000; // keep checking this long while a service wakes up
 const DELETE_CONFIRM_MS = 4000;
 const { workoutsUrl, progressUrl } = window.LIFTLOG_CONFIG;
 const api = window.api;
@@ -29,6 +30,8 @@ let coachExerciseId = null;
 let editingGoalId = null;
 let recordsExerciseId = null;
 const serviceDown = { workouts: false, progress: false };
+const serviceWaking = { workouts: false, progress: false };
+let readsWaiting = false; // api.js is retrying a read while a service wakes up
 
 // --- helpers -------------------------------------------------------------------------------
 
@@ -229,23 +232,46 @@ function go(name) {
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
 
 // --- service status ------------------------------------------------------------------------
-// Each check gives up after 5 s, so a service that is down shows a message instead of a
-// request that hangs. If one is down, the banner says what still works.
+// Each check gives up after 10 s. On Azure a service that sleeps takes longer than that to
+// wake up, so a slow check is repeated for up to 90 s and shows "waking up" meanwhile. Only a
+// refused connection, an error answer or 90 s without one count as "down".
 
-async function checkHealth(name, baseUrl) {
+async function checkHealth(name, baseUrl, started = Date.now()) {
   const item = document.querySelector(`[data-service="${name}"]`);
   const label = item.querySelector(".state");
   try {
     const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
+    serviceWaking[name] = false;
     serviceDown[name] = !response.ok;
     label.textContent = response.ok ? "up" : "database down";
   } catch (error) {
+    const slow = error.name === "TimeoutError";
+    if (slow && Date.now() - started < HEALTH_WAKE_LIMIT_MS) {
+      serviceWaking[name] = true;
+      serviceDown[name] = false;
+      label.textContent = "waking up";
+      item.className = "waking";
+      renderWaking();
+      renderOutage();
+      setTimeout(() => checkHealth(name, baseUrl, started), 1000);
+      return;
+    }
+    serviceWaking[name] = false;
     serviceDown[name] = true;
-    label.textContent = error.name === "TimeoutError" ? "waking up" : "down";
+    label.textContent = "down";
   }
   item.className = serviceDown[name] ? "down" : "up";
+  renderWaking();
   renderOutage();
 }
+
+function renderWaking() {
+  document.getElementById("waking").hidden = !(readsWaiting || serviceWaking.workouts || serviceWaking.progress);
+}
+window.addEventListener("liftlog:waking", (event) => {
+  readsWaiting = event.detail;
+  renderWaking();
+});
 
 function renderOutage() {
   const banner = document.getElementById("outage");

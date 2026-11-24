@@ -56,7 +56,9 @@ Returns the workout with its sets. Sets are numbered per exercise in the order s
 ```
 
 - `notes` is optional (max 500 characters); `weight_kg` 0–1000; `reps` at least 1.
-- `422` if a set names an exercise that doesn't exist; nothing is saved.
+- `sets` must have at least one set (at most 200); an empty or missing list is `422`.
+- `422` if a set names an exercise that doesn't exist; nothing is saved. For `PUT` the
+  workout keeps its old date, notes and sets.
 
 `GET /workouts?from=2026-11-01&to=2026-11-30` → `200`, newest first; both filters optional:
 
