@@ -51,6 +51,8 @@ Done (merged, deployed and checked against the acceptance criteria):
   keeps working where it can; the Log page explains why saving is off (PR #35).
 - #18 Request logs and dashboard: one JSON log line per request, and the dashboard queries
   are deployed as saved queries in Log Analytics (PR #38).
+- #19 SLO: 99% of GET requests to the workouts API answered without a server error in under
+  500 ms over 7 days, in the README, with its query in `monitoring/queries.kql` (PR #38).
 - #20 Personal records: heaviest weight per rep count, worked out from the workouts history
   (PR #43, David).
 - #21 Goals: create, edit, delete, and how close each goal is (PR #34, David).
