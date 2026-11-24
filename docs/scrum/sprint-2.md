@@ -69,6 +69,10 @@ Also done, not in the plan:
 - The UI waits for services that are waking up on Azure instead of showing errors on the
   first visit (PR #48, Emma), and the workouts API refuses a workout with no sets (PR #51,
   Emma).
+- Testing the live site on 24 Nov showed that logging exercise by exercise split one day into
+  several workouts, and the coach then judged only the last one. Fixed on both sides: the
+  history counts a day as one session (PR #55, agreed with Raji, who owns the endpoint) and
+  "Log this session" adds to today's workout (PR #56, Emma).
 
 Shown at the review: _tick what was demoed_
 
@@ -80,9 +84,6 @@ Shown at the review: _tick what was demoed_
 
 Not done (and why, and where it goes): _update before the tag_
 
-- #19 SLO: the SLO is in the README and the query in `monitoring/queries.kql`; its last
-  criterion is "shown at the Sprint Review". Closed once shown.
-- #25 Decision records: ADR-1 to ADR-8 are written; ADR-6 is in PR #47.
 - #28 `AI_USAGE.md` complete: some rows still miss the "in my own words" column.
 - #27 this record and #29 the `submission` tag are done last, after everything above is
   merged.
