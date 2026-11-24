@@ -84,16 +84,19 @@ def delete_exercise(exercise_id: int, conn: Db):
 @router.get("/exercises/{exercise_id}/history", response_model=History)
 def exercise_history(exercise_id: int, conn: Db, limit: Annotated[int | None, Query(ge=1, le=1000)] = None):
     exercise = _exercise_or_404(conn, exercise_id)
-    sessions: dict[int, Session] = {}
+    # one session per day: a day saved as several workouts is still one session, and its
+    # sets are numbered 1, 2, 3... across the day in the order they were logged
+    sessions: dict[date, Session] = {}
     for row in repo.exercise_history(conn, exercise_id, limit or ALL):
         session = sessions.setdefault(
-            row["workout_id"],
-            Session(workout_id=row["workout_id"], performed_on=row["performed_on"], sets=[]),
+            row["performed_on"], Session(performed_on=row["performed_on"], workout_ids=[], sets=[])
         )
+        if row["workout_id"] not in session.workout_ids:
+            session.workout_ids.append(row["workout_id"])
         session.sets.append(
-            HistorySet(set_number=row["set_number"], weight_kg=row["weight_kg"], reps=row["reps"])
+            HistorySet(set_number=len(session.sets) + 1, weight_kg=row["weight_kg"], reps=row["reps"])
         )
-    # dicts keep insertion order, and rows arrive newest first
+    # dicts keep insertion order, and rows arrive newest day first
     return History(exercise=exercise, sessions=list(sessions.values()))
 
 
