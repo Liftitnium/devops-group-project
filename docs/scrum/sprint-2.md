@@ -35,7 +35,7 @@ Working agreements for this sprint:
 - Open a draft PR on the day you start an item.
 - Mon 23 is feature freeze: only fixes after that, plus a demo rehearsal in the evening where each of us presents the part we built.
 
-## Review (23 Nov, _where: in class, a call or the group chat_)
+## Review (24 Nov, on a call)
 
 The Sprint Goal was met: LiftLog is live on the course Azure at
 https://wonderful-grass-0928c6b03.6.azurestaticapps.net, deployed by the pipeline, with
@@ -60,13 +60,15 @@ Done (merged, deployed and checked against the acceptance criteria):
 - #23 Smoke test against the deployed API, run after every deploy (PR #39, Raji).
 - #24 Data model doc matches the migrations: progress half by David (PR #46), workouts half
   by Lorenzo (PR #50).
+- #25 Decision records: six ADRs in `docs/decisions.md`, including ADR-6 on the frontend
+  (PRs #42, #47, #57).
 - #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47).
 
 Also done, not in the plan:
 
 - A new UI look and a QA pass, with a two-column layout on desktop (PR #33, Raji).
-- Each service connects to its database as its own user instead of the admin (ADR-7), and
-  ADR-8 records why the API has no sign-in (PR #37, Raji).
+- Each service connects to its database as its own user instead of the admin, and the API
+  has no sign-in by design; both are recorded in ADR-2 and ADR-1 (PRs #37 and #57, Raji).
 - The coach's wording follows the number of sets (PR #40, Raji).
 - The UI waits for services that are waking up on Azure instead of showing errors on the
   first visit (PR #48, Emma), and the workouts API refuses a workout with no sets (PR #51,
@@ -76,23 +78,21 @@ Also done, not in the plan:
   history counts a day as one session (PR #55, agreed with Raji, who owns the endpoint) and
   "Log this session" adds to today's workout (PR #56, Emma).
 
-Shown at the review: _tick what was demoed_
+Shown at the review:
 
-- [ ] Logging a workout and the next-session coach (Emma)
-- [ ] Progress tab: goals and personal records (Emma, David)
-- [ ] Partial failure: workouts stopped, the rest keeps working (Emma)
-- [ ] The pipeline: a merge deployed and smoke-tested (Raji)
-- [ ] #19 The SLO and the dashboard in Log Analytics (Raji)
+- [x] Logging a workout and the next-session coach (Emma)
+- [x] Progress tab: goals and personal records (Emma, David)
+- [x] Partial failure: workouts stopped, the rest keeps working (Emma)
+- [x] The pipeline: a merge deployed and smoke-tested (Raji)
+- [x] #19 The SLO and the dashboard in Log Analytics (Raji)
 
-Not done (and why, and where it goes): _update before the tag_
+Not done (and why, and where it goes):
 
-- #28 `AI_USAGE.md` complete: some rows still miss the "in my own words" column.
-- #27 this record and #29 the `submission` tag are done last, after everything above is
-  merged.
+- #27 this record and #29 the `submission` tag are done last, after everything above is merged.
 
 Stakeholder feedback:
 
-- _what the professor or anyone outside the team said, or "None this sprint."_
+- None yet; we get the professor's feedback at the Sprint Review on 25 or 26 Nov.
 
 ## Retrospective
 
@@ -104,6 +104,6 @@ Stakeholder feedback:
   half of #24 came on 23 Nov, after being due on 20 Nov). The daily check-in from the
   Sprint 1 retro was not kept by everyone. Many PRs editing `AI_USAGE.md` at once caused
   merge conflicts, and one row was lost in a merge (PR #45) and had to be restored.
-- **Agreement for the next project:** _one concrete change the team agrees on, e.g. "each
-  person adds their AI_USAGE row in the same PR as the work, and anyone resolving a
-  conflict in a shared file checks that no one else's lines were dropped"._
+- **Agreement for the next project:** each person adds their AI_USAGE row in the same PR as
+  the work, and anyone resolving a conflict in a shared file checks that no one else's lines
+  were dropped.
