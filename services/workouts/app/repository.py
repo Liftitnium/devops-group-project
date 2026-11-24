@@ -137,17 +137,24 @@ def list_sets(conn: Connection, workout_id: int) -> list[dict]:
 
 
 def exercise_history(conn: Connection, exercise_id: int, limit: int) -> list[dict]:
-    """Sets of one exercise from its `limit` most recent workouts, newest first."""
+    """Sets of one exercise from its `limit` most recent days, newest day first.
+
+    A day is one session even if it was saved as several workouts, so the coach sees every
+    set of that day. Within a day, sets come in the order they were logged: by workout,
+    then by set number.
+    """
     return conn.execute(
         """SELECT w.id AS workout_id, w.performed_on, s.set_number, s.weight_kg, s.reps
            FROM (
-               SELECT TOP (%s) w.id, w.performed_on
+               SELECT TOP (%s) w.performed_on
                FROM workouts w
                WHERE EXISTS (SELECT 1 FROM workout_sets x
                              WHERE x.workout_id = w.id AND x.exercise_id = %s)
-               ORDER BY w.performed_on DESC, w.id DESC
-           ) w
+               GROUP BY w.performed_on
+               ORDER BY w.performed_on DESC
+           ) d
+           JOIN workouts w ON w.performed_on = d.performed_on
            JOIN workout_sets s ON s.workout_id = w.id AND s.exercise_id = %s
-           ORDER BY w.performed_on DESC, w.id DESC, s.set_number""",
+           ORDER BY w.performed_on DESC, w.id, s.set_number""",
         (limit, exercise_id, exercise_id),
     ).fetchall()
