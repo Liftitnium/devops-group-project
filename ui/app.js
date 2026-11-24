@@ -417,19 +417,22 @@ function renderCoach() {
     el("p", { class: "coach-reason" }, rec.reason),
     el("div", { class: "coach-foot" },
       el("span", {}, evidence),
-      el("button", { type: "button", class: "coach-cta", onclick: () => logFromCoach(ex, rec) },
+      el("button", { type: "button", class: "coach-cta", onclick: (e) => logFromCoach(ex, rec, e.currentTarget) },
         rec.weight_kg === null ? "Log first session" : "Log this session", icon("arrow"))),
   );
 }
 
-// fill the log form with the suggested sets, so following the coach is one tap
-function logFromCoach(ex, rec) {
+// Fill the log form with the suggested sets, so following the coach is one tap. A day's
+// lifting is one workout: if one is already saved for today, the suggestion is added to it
+// instead of starting a second workout for the same day.
+function logFromCoach(ex, rec, button) {
+  const suggested = Array.from({ length: rec.sets ?? 1 }, () =>
+    ({ exercise_id: ex.id, weight_kg: rec.weight_kg ?? undefined, reps: rec.target_reps ?? undefined }));
+  const today = workoutOn(isoDay(new Date()));
+  if (today) return editWorkout(today.id, button, suggested);
   resetLogForm();
   document.getElementById("set-rows").replaceChildren();
-  const count = rec.sets ?? 1;
-  for (let i = 0; i < count; i++) {
-    addSetRow({ exercise_id: ex.id, weight_kg: rec.weight_kg ?? undefined, reps: rec.target_reps ?? undefined });
-  }
+  suggested.forEach((s) => addSetRow(s));
   go("log");
 }
 
@@ -584,9 +587,42 @@ function renderLogState() {
   logError.hidden = !state.loadError;
   logError.textContent = state.loadError ? `${state.loadError} You can log again once it's back.` : "";
   const save = document.getElementById("save-workout");
+  renderSameDay();
   if (save.classList.contains("busy")) return;
   save.disabled = state.loading || noExercises || Boolean(state.loadError);
   save.textContent = state.loading ? "Loading exercises..." : editingWorkoutId ? "Save changes" : "Save workout";
+}
+
+// the newest workout saved on a date (the list is newest first)
+const workoutOn = (iso) => state.workouts.find((w) => w.performed_on === iso);
+
+// Logging a new workout on a date that already has one: offer to add these sets to it, so
+// History keeps one workout per day and the coach sees the whole day.
+function renderSameDay() {
+  const hint = document.getElementById("log-same-day");
+  const date = document.getElementById("log-form").performed_on.value;
+  const existing = !editingWorkoutId && date ? workoutOn(date) : null;
+  hint.hidden = !existing;
+  if (!existing) return put(hint);
+  put(hint, `You already logged a workout on ${formatDate(date)}. `,
+    el("button", { type: "button", class: "link", onclick: (e) => addFormToWorkout(existing.id, e.currentTarget) },
+      "Add these sets to it"));
+}
+
+// the sets typed so far that have both kg and reps
+function formSets() {
+  return [...document.querySelectorAll(".set-row")]
+    .map((row) => ({
+      exercise_id: row.querySelector("select").value,
+      weight_kg: row.querySelector('[name="weight_kg"]').value,
+      reps: row.querySelector('[name="reps"]').value,
+    }))
+    .filter((s) => s.exercise_id && s.weight_kg !== "" && s.reps !== "");
+}
+
+function addFormToWorkout(id, button) {
+  const notes = document.getElementById("log-form").notes.value.trim();
+  editWorkout(id, button, formSets(), notes);
 }
 
 // sets are numbered per exercise, like the service numbers them
@@ -626,7 +662,10 @@ function renderDateReadout() {
   const value = document.getElementById("log-form").performed_on.value;
   document.getElementById("date-readout").textContent = value ? longFmt.format(toDate(value)) : "";
 }
-document.getElementById("log-form").performed_on.addEventListener("input", renderDateReadout);
+document.getElementById("log-form").performed_on.addEventListener("input", () => {
+  renderDateReadout();
+  renderSameDay();
+});
 
 function resetLogForm() {
   editingWorkoutId = null;
@@ -641,7 +680,9 @@ function resetLogForm() {
   renderLogState();
 }
 
-async function editWorkout(id, button) {
+// open a saved workout in the Log form; `extraSets` (and `extraNotes`) are added after what
+// it already has, for "Log this session" and "Add these sets to it"
+async function editWorkout(id, button, extraSets = [], extraNotes = "") {
   const ok = await withButton(button, "Opening...", async () => {
     await loadDetails([id]);
     return true;
@@ -651,10 +692,11 @@ async function editWorkout(id, button) {
   const form = document.getElementById("log-form");
   editingWorkoutId = id;
   form.performed_on.value = workout.performed_on;
-  form.notes.value = workout.notes;
+  form.notes.value = [workout.notes, extraNotes].filter(Boolean).join(" ");
   document.getElementById("set-rows").replaceChildren();
-  workout.sets.forEach((s) => addSetRow(s));
-  document.getElementById("log-heading").textContent = `Edit ${formatDate(workout.performed_on)}`;
+  [...workout.sets, ...extraSets].forEach((s) => addSetRow(s));
+  document.getElementById("log-heading").textContent =
+    `${extraSets.length ? "Add to" : "Edit"} ${formatDate(workout.performed_on)}`;
   document.getElementById("cancel-workout-edit").hidden = false;
   renderDateReadout();
   renderLogState();
