@@ -14,17 +14,17 @@ This is the last sprint, so every open Product Backlog item is in it. Raji (PO) 
 
 Items selected:
 
-- [ ] #8 Deploy to Azure by the pipeline (Raji, Fri 20). Everything that needs the live URL depends on it.
-- [ ] #17 Clear message when a service is down (Emma, Fri 20)
-- [ ] #21 Goals (David, Fri 20)
-- [ ] #18 Request logs and dashboard in Log Analytics (Raji, Sat 21)
-- [ ] #19 SLO with its query (Raji, Sat 21)
-- [ ] #20 Personal records (David, Sat 21)
-- [ ] #22 UI: personal records board and goals (Emma, Sun 22, needs #20 and #21)
-- [ ] #23 Smoke test against the deployed URL (Raji, Sun 22)
-- [ ] #24 Data model doc matches migrations (Lorenzo workouts half by Fri 20, David progress half by Sun 22)
-- [ ] #26 README complete (Emma, from Fri 20)
-- [ ] #25 Decision records (Emma ADR-6 frontend, Raji ADR-3/4, Mon 23)
+- [x] #8 Deploy to Azure by the pipeline (Raji, Fri 20). Everything that needs the live URL depends on it.
+- [x] #17 Clear message when a service is down (Emma, Fri 20)
+- [x] #21 Goals (David, Fri 20)
+- [x] #18 Request logs and dashboard in Log Analytics (Raji, Sat 21)
+- [x] #19 SLO with its query (Raji, Sat 21)
+- [x] #20 Personal records (David, Sat 21)
+- [x] #22 UI: personal records board and goals (Emma, Sun 22, needs #20 and #21)
+- [x] #23 Smoke test against the deployed URL (Raji, Sun 22)
+- [x] #24 Data model doc matches migrations (Lorenzo workouts half by Fri 20, David progress half by Sun 22)
+- [x] #26 README complete (Emma, from Fri 20)
+- [x] #25 Decision records (Emma ADR-6 frontend, Raji ADR-3/4, Mon 23)
 - [ ] #28 AI_USAGE.md complete (everyone writes the last column of their own rows, Mon 23)
 - [ ] #27 Sprint 1 and Sprint 2 records (Emma, Tue 24)
 - [ ] #29 Tag the submission (Emma and Raji, Tue 24 by 20:00)
@@ -35,22 +35,95 @@ Working agreements for this sprint:
 - Open a draft PR on the day you start an item.
 - Mon 23 is feature freeze: only fixes after that, plus a demo rehearsal in the evening where each of us presents the part we built.
 
-## Review
+## Review (24 Nov, on a call)
 
-Done:
+The Sprint Goal was met: LiftLog is live on the course Azure at
+https://wonderful-grass-0928c6b03.6.azurestaticapps.net, deployed by the pipeline, with
+personal records, goals, the dashboard and the SLO.
 
-- _#issue — what was shown_
+Done (merged, deployed and checked against the acceptance criteria):
+
+- #8 Deploy to Azure by the pipeline: every merge to `main` builds images tagged with the
+  commit SHA, updates both Container Apps and the UI, waits for `/health` to report the new
+  SHA, then runs the smoke test. Sign-in to Azure uses OIDC, with no stored secret (PRs #37,
+  #39, first green deploy with PR #45, 21 Nov).
+- #17 Clear message when a service is down: every page says what is wrong in plain words and
+  keeps working where it can; the Log page explains why saving is off (PR #35).
+- #18 Request logs and dashboard: one JSON log line per request, and the dashboard queries
+  are deployed as saved queries in Log Analytics (PR #38).
+- #19 SLO: 99% of GET requests to the workouts API answered without a server error in under
+  500 ms over 7 days, in the README, with its query in `monitoring/queries.kql` (PR #38).
+- #20 Personal records: heaviest weight per rep count, worked out from the workouts history
+  (PR #43, David).
+- #21 Goals: create, edit, delete, and how close each goal is (PR #34, David).
+- #22 UI for personal records and goals: the Progress tab (PR #44, Emma).
+- #23 Smoke test against the deployed API, run after every deploy (PR #39, Raji).
+- #24 Data model doc matches the migrations: progress half by David (PR #46), workouts half
+  by Lorenzo (PR #50).
+- #25 Decision records: six ADRs in `docs/decisions.md`, including ADR-6 on the frontend
+  (PRs #42, #47, #57).
+- #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47).
+
+Planned and actual dates:
+
+| Item | Planned | Done |
+|---|---|---|
+| #17 Clear message when a service is down (Emma) | Fri 20 Nov | Fri 20 Nov (PR #35) |
+| #21 Goals (David) | Fri 20 Nov | Fri 20 Nov (PR #34) |
+| #18 Request logs and dashboard (Raji) | Sat 21 Nov | Fri 20 Nov (PR #38) |
+| #23 Smoke test (Raji) | Sun 22 Nov | Fri 20 Nov (PR #39) |
+| #20 Personal records (David) | Sat 21 Nov | Sat 21 Nov (PR #43) |
+| #22 UI: personal records and goals (Emma) | Sun 22 Nov | Sat 21 Nov (PR #44) |
+| #8 Deploy to Azure by the pipeline (Raji) | Fri 20 Nov | Sun 22 Nov, first green deploy (PR #45) |
+| #24 Data model, progress half (David) | Sun 22 Nov | Mon 23 Nov (PR #46) |
+| #24 Data model, workouts half (Lorenzo) | Fri 20 Nov | Tue 24 Nov (PR #50) |
+| #19 SLO with its query (Raji) | Sat 21 Nov | Fri 20 Nov query (PR #38), shown Tue 24 Nov |
+| #26 README complete (Emma) | from Fri 20 Nov | Tue 24 Nov (PRs #41, #42, #47) |
+| #25 Decision records (Emma, Raji) | Mon 23 Nov | Tue 24 Nov (PRs #42, #47, #57) |
+| #28 AI_USAGE.md complete (everyone) | Mon 23 Nov | Tue 24 Nov (PRs #53, #54) |
+| #27 Sprint 1 and Sprint 2 records (Emma) | Tue 24 Nov | Tue 24 Nov (PR #52) |
+| #29 Tag the submission (Emma, Raji) | Tue 24 Nov | Tue 24 Nov |
+
+Also done, not in the plan:
+
+- A new UI look and a QA pass, with a two-column layout on desktop (PR #33, Raji).
+- Each service connects to its database as its own user instead of the admin, and the API
+  has no sign-in by design; both are recorded in ADR-2 and ADR-1 (PRs #37 and #57, Raji).
+- The coach's wording follows the number of sets (PR #40, Raji).
+- The UI waits for services that are waking up on Azure instead of showing errors on the
+  first visit (PR #48, Emma), and the workouts API refuses a workout with no sets (PR #51,
+  Emma).
+- Testing the live site on 24 Nov showed that logging exercise by exercise split one day into
+  several workouts, and the coach then judged only the last one. Fixed on both sides: the
+  history counts a day as one session (PR #55, agreed with Raji, who owns the endpoint) and
+  "Log this session" adds to today's workout (PR #56, Emma).
+
+Shown at the review:
+
+- [x] Logging a workout and the next-session coach (Emma)
+- [x] Progress tab: goals and personal records (Emma, David)
+- [x] Partial failure: workouts stopped, the rest keeps working (Emma)
+- [x] The pipeline: a merge deployed and smoke-tested (Raji)
+- [x] #19 The SLO and the dashboard in Log Analytics (Raji)
 
 Not done (and why, and where it goes):
 
-- _#issue — reason_
+- #27 this record and #29 the `submission` tag are done last, after everything above is merged.
 
 Stakeholder feedback:
 
-- _..._
+- None yet; we get the professor's feedback at the Sprint Review on 25 or 26 Nov.
 
 ## Retrospective
 
-- Went well: _..._
-- To improve: _..._
-- **Agreement for next sprint:** _one concrete change_
+- Went well: every planned feature shipped and is live, and every merge to `main` is
+  deployed and smoke-tested without anyone running commands by hand. Every PR needed an
+  approval from someone other than its author, because branch protection requires it. Working against a written API contract
+  let the UI, the coach, goals and records be built in parallel.
+- To improve: work was still uneven, and some items arrived on the last day (the workouts
+  half of #24 came on 23 Nov, after being due on 20 Nov). The daily check-in from the
+  Sprint 1 retro was not kept by everyone. Many PRs editing `AI_USAGE.md` at once caused
+  merge conflicts, and one row was lost in a merge (PR #45) and had to be restored.
+- **Agreement for the next project:** each person adds their AI_USAGE row in the same PR as
+  the work, and anyone resolving a conflict in a shared file checks that no one else's lines
+  were dropped.
