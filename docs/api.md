@@ -10,7 +10,9 @@ in its OpenAPI page (`/docs` on the service URL).
 Used by the progress service for the next-session coach (`limit=1`) and for PR detection.
 Owned by the workouts service; change it only together with its callers in progress.
 
-`200 OK`, sessions newest first, at most `limit` of them (default: all):
+A **session is one day**: every set of this exercise logged on that date, even if the day was
+saved as several workouts. `200 OK`, sessions newest first, at most `limit` days (default:
+all):
 
 ```json
 {
@@ -23,8 +25,8 @@ Owned by the workouts service; change it only together with its callers in progr
   },
   "sessions": [
     {
-      "workout_id": 17,
       "performed_on": "2026-11-17",
+      "workout_ids": [17],
       "sets": [
         {"set_number": 1, "weight_kg": 60.0, "reps": 12},
         {"set_number": 2, "weight_kg": 60.0, "reps": 11}
@@ -36,7 +38,10 @@ Owned by the workouts service; change it only together with its callers in progr
 
 - `body_part` is `"upper"` or `"lower"`.
 - `sessions` is `[]` when the exercise exists but was never performed.
-- Only sets of this exercise appear in `sets`, ordered by `set_number`.
+- Only sets of this exercise appear in `sets`. They are numbered 1, 2, 3… across the day in the
+  order they were logged (by workout, then by set), so `set_number` here can differ from the
+  number inside one workout.
+- `workout_ids` lists the workouts of that day that contain this exercise, oldest first.
 - `404` when the exercise does not exist.
 
 Progress answers `503` with a readable message if this call times out (3 s) or the workouts

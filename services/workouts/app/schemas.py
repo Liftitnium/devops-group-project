@@ -81,8 +81,10 @@ class HistorySet(BaseModel):
 
 
 class Session(BaseModel):
-    workout_id: int
+    """One day of an exercise: every set of it logged on that date, in any workout."""
+
     performed_on: date
+    workout_ids: list[int]
     sets: list[HistorySet]
 
 
