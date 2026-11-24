@@ -14,17 +14,17 @@ This is the last sprint, so every open Product Backlog item is in it. Raji (PO) 
 
 Items selected:
 
-- [ ] #8 Deploy to Azure by the pipeline (Raji, Fri 20). Everything that needs the live URL depends on it.
-- [ ] #17 Clear message when a service is down (Emma, Fri 20)
-- [ ] #21 Goals (David, Fri 20)
-- [ ] #18 Request logs and dashboard in Log Analytics (Raji, Sat 21)
-- [ ] #19 SLO with its query (Raji, Sat 21)
-- [ ] #20 Personal records (David, Sat 21)
-- [ ] #22 UI: personal records board and goals (Emma, Sun 22, needs #20 and #21)
-- [ ] #23 Smoke test against the deployed URL (Raji, Sun 22)
-- [ ] #24 Data model doc matches migrations (Lorenzo workouts half by Fri 20, David progress half by Sun 22)
-- [ ] #26 README complete (Emma, from Fri 20)
-- [ ] #25 Decision records (Emma ADR-6 frontend, Raji ADR-3/4, Mon 23)
+- [x] #8 Deploy to Azure by the pipeline (Raji, Fri 20). Everything that needs the live URL depends on it.
+- [x] #17 Clear message when a service is down (Emma, Fri 20)
+- [x] #21 Goals (David, Fri 20)
+- [x] #18 Request logs and dashboard in Log Analytics (Raji, Sat 21)
+- [x] #19 SLO with its query (Raji, Sat 21)
+- [x] #20 Personal records (David, Sat 21)
+- [x] #22 UI: personal records board and goals (Emma, Sun 22, needs #20 and #21)
+- [x] #23 Smoke test against the deployed URL (Raji, Sun 22)
+- [x] #24 Data model doc matches migrations (Lorenzo workouts half by Fri 20, David progress half by Sun 22)
+- [x] #26 README complete (Emma, from Fri 20)
+- [x] #25 Decision records (Emma ADR-6 frontend, Raji ADR-3/4, Mon 23)
 - [ ] #28 AI_USAGE.md complete (everyone writes the last column of their own rows, Mon 23)
 - [ ] #27 Sprint 1 and Sprint 2 records (Emma, Tue 24)
 - [ ] #29 Tag the submission (Emma and Raji, Tue 24 by 20:00)
@@ -63,6 +63,26 @@ Done (merged, deployed and checked against the acceptance criteria):
 - #25 Decision records: six ADRs in `docs/decisions.md`, including ADR-6 on the frontend
   (PRs #42, #47, #57).
 - #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47).
+
+Planned and actual dates:
+
+| Item | Planned | Done |
+|---|---|---|
+| #17 Clear message when a service is down (Emma) | Fri 20 Nov | Fri 20 Nov (PR #35) |
+| #21 Goals (David) | Fri 20 Nov | Fri 20 Nov (PR #34) |
+| #18 Request logs and dashboard (Raji) | Sat 21 Nov | Fri 20 Nov (PR #38) |
+| #23 Smoke test (Raji) | Sun 22 Nov | Fri 20 Nov (PR #39) |
+| #20 Personal records (David) | Sat 21 Nov | Sat 21 Nov (PR #43) |
+| #22 UI: personal records and goals (Emma) | Sun 22 Nov | Sat 21 Nov (PR #44) |
+| #8 Deploy to Azure by the pipeline (Raji) | Fri 20 Nov | Sun 22 Nov, first green deploy (PR #45) |
+| #24 Data model, progress half (David) | Sun 22 Nov | Mon 23 Nov (PR #46) |
+| #24 Data model, workouts half (Lorenzo) | Fri 20 Nov | Tue 24 Nov (PR #50) |
+| #19 SLO with its query (Raji) | Sat 21 Nov | Fri 20 Nov query (PR #38), shown Tue 24 Nov |
+| #26 README complete (Emma) | from Fri 20 Nov | Tue 24 Nov (PRs #41, #42, #47) |
+| #25 Decision records (Emma, Raji) | Mon 23 Nov | Tue 24 Nov (PRs #42, #47, #57) |
+| #28 AI_USAGE.md complete (everyone) | Mon 23 Nov | Tue 24 Nov (PRs #53, #54) |
+| #27 Sprint 1 and Sprint 2 records (Emma) | Tue 24 Nov | Tue 24 Nov (PR #52) |
+| #29 Tag the submission (Emma, Raji) | Tue 24 Nov | Tue 24 Nov |
 
 Also done, not in the plan:
 
