@@ -227,23 +227,56 @@ def test_history_matches_the_contract_newest_first_and_only_this_exercise(client
         "exercise": {"id": bench["id"], **BENCH},
         "sessions": [
             {
-                "workout_id": last["id"],
                 "performed_on": "2026-11-17",
+                "workout_ids": [last["id"]],
                 "sets": [
                     {"set_number": 1, "weight_kg": 60.0, "reps": 12},
                     {"set_number": 2, "weight_kg": 60.0, "reps": 11},
                 ],
             },
             {
-                "workout_id": first["id"],
                 "performed_on": "2026-11-10",
+                "workout_ids": [first["id"]],
                 "sets": [{"set_number": 1, "weight_kg": 60.0, "reps": 10}],
             },
         ],
     }
 
     limited = client.get(f"/exercises/{bench['id']}/history", params={"limit": 1}).json()
-    assert [s["workout_id"] for s in limited["sessions"]] == [last["id"]]
+    assert [s["workout_ids"] for s in limited["sessions"]] == [[last["id"]]]
+
+
+def test_a_day_saved_as_several_workouts_is_one_session(client):
+    bench, squat = make_exercise(client), make_exercise(client, **SQUAT)
+    log_workout(client, "2026-11-20", [{"exercise_id": bench["id"], "weight_kg": 60, "reps": 12}])
+    # the same day logged in three parts, one of them without bench
+    two_bench_sets = [{"exercise_id": bench["id"], "weight_kg": 62.5, "reps": 8}] * 2
+    morning = log_workout(client, "2026-11-24", two_bench_sets)
+    log_workout(client, "2026-11-24", [{"exercise_id": squat["id"], "weight_kg": 100, "reps": 5}])
+    evening = log_workout(
+        client,
+        "2026-11-24",
+        [
+            {"exercise_id": bench["id"], "weight_kg": 62.5, "reps": 9},
+            {"exercise_id": squat["id"], "weight_kg": 100, "reps": 5},
+        ],
+    )
+
+    sessions = client.get(f"/exercises/{bench['id']}/history").json()["sessions"]
+    assert [s["performed_on"] for s in sessions] == ["2026-11-24", "2026-11-20"]
+    assert sessions[0] == {
+        "performed_on": "2026-11-24",
+        "workout_ids": [morning["id"], evening["id"]],
+        "sets": [
+            {"set_number": 1, "weight_kg": 62.5, "reps": 8},
+            {"set_number": 2, "weight_kg": 62.5, "reps": 8},
+            {"set_number": 3, "weight_kg": 62.5, "reps": 9},
+        ],
+    }
+
+    # limit counts days, not workouts: the latest day comes back whole
+    latest = client.get(f"/exercises/{bench['id']}/history", params={"limit": 1}).json()["sessions"]
+    assert [(s["performed_on"], len(s["sets"])) for s in latest] == [("2026-11-24", 3)]
 
 
 def test_history_of_an_unused_exercise_has_no_sessions(client):
