@@ -58,7 +58,7 @@ Done (merged, deployed and checked against the acceptance criteria):
 - #23 Smoke test against the deployed API, run after every deploy (PR #39, Raji).
 - #24 Data model doc matches the migrations: progress half by David (PR #46), workouts half
   by Lorenzo (PR #50).
-- #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47 _open on 23 Nov_).
+- #26 README complete: how to use the app, screenshot, team, live URL (PRs #41, #42, #47).
 
 Also done, not in the plan:
 
@@ -68,7 +68,7 @@ Also done, not in the plan:
 - The coach's wording follows the number of sets (PR #40, Raji).
 - The UI waits for services that are waking up on Azure instead of showing errors on the
   first visit (PR #48, Emma), and the workouts API refuses a workout with no sets (PR #51,
-  Emma). _Both open on 23 Nov._
+  Emma).
 
 Shown at the review: _tick what was demoed_
 
